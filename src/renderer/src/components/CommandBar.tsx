@@ -66,9 +66,9 @@ export default function CommandBar({
           onClick={onMicClick}
           style={{
             flexShrink: 0,
-            width: 52,
-            height: 52,
-            borderRadius: 14,
+            width: 64,
+            height: 64,
+            borderRadius: 16,
             background: isListening ? 'transparent' : 'linear-gradient(135deg, #FF54B0 0%, #FF4B33 100%)',
             display: 'flex',
             alignItems: 'center',
@@ -80,9 +80,7 @@ export default function CommandBar({
           }}
         >
           {isListening || isWorking ? (
-            <div style={{ transform: 'scale(1.2)' }}>
-              <OrbShader isListening={isListening} isWorking={isWorking} size={64} />
-            </div>
+            <OrbShader isListening={isListening} isWorking={isWorking} size={64} />
           ) : (
             <LogoIcon size={32} />
           )}

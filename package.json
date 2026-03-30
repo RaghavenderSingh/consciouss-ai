@@ -31,6 +31,7 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
     "node-telegram-bot-api": "^0.67.0",
+    "shaders": "^2.5.85",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
