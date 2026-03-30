@@ -1,0 +1,60 @@
+@import 'tailwindcss';
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  background: transparent !important;
+  overflow: hidden;
+  user-select: none;
+  font-family: -apple-system, system-ui, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+}
+
+input,
+textarea {
+  user-select: text;
+  font-family: inherit;
+  color: white;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+.bubble-pill {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  color: white !important;
+  border-radius: 0px !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.bubble-tail {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  width: 8px !important;
+  height: 8px !important;
+  position: absolute !important;
+  top: 100% !important;
+  right: -4px !important;
+  transform: translateY(-50%) !important;
+  z-index: -1 !important;
+  box-shadow: none !important;
+}
