@@ -140,7 +140,6 @@ export default function OrbShader({ isListening, isWorking, size = 260 }: Props)
           width: '120%',
           height: '120%',
           borderRadius: '50%',
-          background: `radial-gradient(circle, ${colors.glow} 0%, transparent 70%)`,
           filter: 'blur(32px)',
           pointerEvents: 'none',
           transition: 'background 0.8s ease',
