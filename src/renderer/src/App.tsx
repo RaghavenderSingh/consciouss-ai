@@ -133,7 +133,6 @@ export default function App(): ReactElement {
   const handleStop = useCallback((): void => {
     stopChips()
     stopTimer()
-    window.speechSynthesis.cancel()
     setAppState(messages.length > 0 ? 'chat' : 'idle')
   }, [messages.length, stopChips, stopTimer])
 
@@ -290,13 +289,6 @@ export default function App(): ReactElement {
           return
         }
 
-        if (aiResponse.message) {
-          window.speechSynthesis.cancel()
-          const utterance = new SpeechSynthesisUtterance(aiResponse.message)
-          // Optional: slightly tune the voice
-          utterance.rate = 1.05
-          window.speechSynthesis.speak(utterance)
-        }
 
         const agentMsgId = `msg-${Date.now()}-ai`
         const agentMsg: Message = {
