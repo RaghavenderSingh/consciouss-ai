@@ -28,13 +28,53 @@ import { parse as parseUrl } from 'url'
 
 let mainWindow: BrowserWindow | null = null
 let telegramBot: TelegramBot | null = null
+let telegramDiscoveryMode = false
+
+// ─── Session memory ────────────────────────────────────────────────────────────
+const MEMORY_PATH = join(app.getPath('userData'), 'memory.json')
+const CHATS_PATH = join(app.getPath('userData'), 'chats.json')
+const TELEGRAM_CONFIG_PATH = join(app.getPath('userData'), 'telegram_config.json')
 
 import type { ChatSession } from './types'
 
+interface TelegramConfig {
+  token: string
+  chatId: string
+  enabled: boolean
+}
+
+function getTelegramConfig(): TelegramConfig {
+  try {
+    if (existsSync(TELEGRAM_CONFIG_PATH)) {
+      return JSON.parse(readFileSync(TELEGRAM_CONFIG_PATH, 'utf-8'))
+    }
+  } catch (err) {
+    console.error('[Telegram] Failed to read config:', err)
+  }
+  return {
+    token: process.env.TELEGRAM_BOT_TOKEN || '',
+    chatId: process.env.TELEGRAM_CHAT_ID || '',
+    enabled: !!process.env.TELEGRAM_BOT_TOKEN
+  }
+}
+
 // ─── Telegram bot init ────────────────────────────────────────────────────────
 function initTelegram(): void {
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  const allowedChatId = process.env.TELEGRAM_CHAT_ID
+  // Stop existing bot if running
+  if (telegramBot) {
+    telegramBot.stopPolling()
+    telegramBot = null
+    // Clear existing IPC listeners to avoid duplicates
+    ipcMain.removeAllListeners('telegram-reply')
+    ipcMain.removeAllListeners('telegram-screenshot-reply')
+  }
+
+  const { token, chatId: allowedChatId, enabled } = getTelegramConfig()
+
+  if (!enabled || !token || token.startsWith('your_') || token.trim() === '') {
+    console.log('[Telegram] Bot disabled or no valid token')
+    return
+  }
 
   if (!token || token.startsWith('your_')) {
     console.log('[Telegram] No valid TELEGRAM_BOT_TOKEN set, skipping bot init')
@@ -53,6 +93,22 @@ function initTelegram(): void {
 
     telegramBot.on('message', (msg) => {
       const chatId = String(msg.chat.id)
+      
+      // Discovery Mode: auto-capture chatId
+      if (telegramDiscoveryMode) {
+        console.log(`[Telegram] Discovery: Captured Chat ID ${chatId}`)
+        telegramDiscoveryMode = false
+        
+        const config = getTelegramConfig()
+        const newConfig = { ...config, chatId, enabled: true }
+        writeFileSync(TELEGRAM_CONFIG_PATH, JSON.stringify(newConfig, null, 2))
+        
+        mainWindow?.webContents.send('telegram-discovered', { chatId, username: msg.from?.username || 'User' })
+        
+        // Welcome message
+        telegramBot?.sendMessage(chatId, `✅ Successfully linked to Consciouss AI! You can now control your desktop remotely from here.`).catch(console.error)
+        return
+      }
 
       // Security: only respond to allowed chat
       if (allowedChatId && chatId !== allowedChatId) {
@@ -79,16 +135,18 @@ function initTelegram(): void {
 
     // Listen for replies from renderer to send back to Telegram
     ipcMain.on('telegram-reply', (_, text: string) => {
-      if (!allowedChatId) return
-      telegramBot?.sendMessage(allowedChatId, text).catch(console.error)
+      const config = getTelegramConfig()
+      if (!config.chatId) return
+      telegramBot?.sendMessage(config.chatId, text).catch(console.error)
     })
 
     // Listen for screenshot to send to Telegram
     ipcMain.on('telegram-screenshot-reply', (_, base64: string) => {
-      if (!allowedChatId) return
+      const config = getTelegramConfig()
+      if (!config.chatId) return
       const buffer = Buffer.from(base64.replace(/^data:image\/\w+;base64,/, ''), 'base64')
       telegramBot
-        ?.sendPhoto(allowedChatId, buffer, { caption: 'Current screen' })
+        ?.sendPhoto(config.chatId, buffer, { caption: 'Current screen' })
         .catch(console.error)
     })
 
@@ -522,10 +580,36 @@ ipcMain.handle('set-window-size', (_, mode: 'expanded' | 'companion' | 'pill' | 
   mainWindow.setBounds(sizes[mode], true) // true = native macOS spring animation
 })
 
-// ── Session memory ────────────────────────────────────────────────────────────
-const MEMORY_PATH = join(app.getPath('userData'), 'memory.json')
-const CHATS_PATH = join(app.getPath('userData'), 'chats.json')
+// ─── Telegram IPC ─────────────────────────────────────────────────────────────
+ipcMain.handle('get-telegram-config', () => getTelegramConfig())
 
+ipcMain.handle('update-telegram-config', (_, newConfig: TelegramConfig) => {
+  try {
+    writeFileSync(TELEGRAM_CONFIG_PATH, JSON.stringify(newConfig, null, 2))
+    initTelegram()
+    return { success: true }
+  } catch (err) {
+    console.error('[Telegram] Failed to save config:', err)
+    return { success: false, error: String(err) }
+  }
+})
+
+ipcMain.handle('get-telegram-status', () => {
+  return {
+    isActive: !!telegramBot && telegramBot.isPolling(),
+    botName: telegramBot ? 'Consciouss Bot' : null,
+    isDiscoveryActive: telegramDiscoveryMode
+  }
+})
+
+ipcMain.handle('start-telegram-discovery', () => {
+  if (!telegramBot) return { success: false, error: 'Bot not initialized. Please provide a token first.' }
+  telegramDiscoveryMode = true
+  console.log('[Telegram] Discovery mode activated')
+  return { success: true }
+})
+
+// ── Session memory ────────────────────────────────────────────────────────────
 ipcMain.handle('read-memory', () => {
   try {
     if (!existsSync(MEMORY_PATH)) return null

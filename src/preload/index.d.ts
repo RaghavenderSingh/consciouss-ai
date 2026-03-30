@@ -35,6 +35,11 @@ export interface ElectronBridge {
   onTelegramScreenshotRequest(callback: () => void): void
   sendTelegramReply(text: string): void
   sendTelegramScreenshot(base64: string): void
+  getTelegramConfig(): Promise<any>
+  updateTelegramConfig(config: any): Promise<any>
+  getTelegramStatus(): Promise<any>
+  startTelegramDiscovery(): Promise<any>
+  onTelegramDiscovered(callback: (data: any) => void): void
   readChats(): Promise<any[]>
   writeChats(sessions: any[]): Promise<void>
   setWindowSize(mode: 'expanded' | 'companion' | 'pill' | 'spotlight'): Promise<void>

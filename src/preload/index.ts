@@ -52,6 +52,15 @@ const electronAPI = {
     ipcRenderer.send('telegram-screenshot-reply', base64)
   },
 
+  getTelegramConfig: (): Promise<any> => ipcRenderer.invoke('get-telegram-config'),
+  updateTelegramConfig: (config: any): Promise<any> => ipcRenderer.invoke('update-telegram-config', config),
+  getTelegramStatus: (): Promise<any> => ipcRenderer.invoke('get-telegram-status'),
+  startTelegramDiscovery: (): Promise<any> => ipcRenderer.invoke('start-telegram-discovery'),
+  onTelegramDiscovered: (callback: (data: any) => void): void => {
+    ipcRenderer.removeAllListeners('telegram-discovered')
+    ipcRenderer.on('telegram-discovered', (_, data) => callback(data))
+  },
+
   // Chats
   readChats: (): Promise<ChatSession[]> => ipcRenderer.invoke('read-chats'),
   writeChats: (sessions: ChatSession[]): Promise<void> =>

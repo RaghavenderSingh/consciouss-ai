@@ -12,6 +12,7 @@ import HomeView from './components/HomeView'
 import SpotlightBar from './components/SpotlightBar'
 import LoginView from './components/LoginView'
 import LoginLogsView from './components/LoginLogsView'
+import TelegramView from './components/TelegramView'
 
 import { useOpenRouter } from './hooks/useOpenRouter'
 import { useScreenCapture } from './hooks/useScreenCapture'
@@ -201,7 +202,7 @@ export default function App(): ReactElement {
   }, [handleNewChat])
 
   const handleSubmit = useCallback(
-    async (text: string) => {
+    async (text: string, source: 'ui' | 'telegram' = 'ui') => {
       setVoiceTranscript('')
 
       const timestamp = new Date()
@@ -464,7 +465,9 @@ export default function App(): ReactElement {
         } else {
           setAppState('chat')
         }
-        window.electronAPI?.sendTelegramReply?.(aiResponse.message)
+        if (source === 'telegram') {
+          window.electronAPI?.sendTelegramReply?.(aiResponse.message)
+        }
       } catch (err) {
         console.error('[App] handleSubmit catastrophic failure:', err)
         setAppState('chat')
@@ -524,7 +527,7 @@ export default function App(): ReactElement {
   useEffect(() => {
     if (!window.electronAPI) return
     window.electronAPI.onTelegramMessage((text): void => {
-      latestSubmitRef.current(text)
+      latestSubmitRef.current(text, 'telegram')
     })
     window.electronAPI.onTelegramStop((): void => handleStop())
     window.electronAPI.onWakeShortcut((): void => handleWakeWord())
@@ -705,7 +708,6 @@ export default function App(): ReactElement {
                 <div
                   style={{ display: 'flex', alignItems: 'center', gap: 16, pointerEvents: 'auto' }}
                 >
-
                 </div>
               </div>
 
@@ -723,9 +725,10 @@ export default function App(): ReactElement {
                   {inChat ? (
                     <motion.div
                       key="chat"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       style={{
                         height: '100%',
                         width: '100%',
@@ -742,12 +745,24 @@ export default function App(): ReactElement {
                         isCompact={isCompanion}
                       />
                     </motion.div>
+                  ) : activeTab === 'telegram' ? (
+                    <motion.div
+                      key="telegram"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
+                    >
+                      <TelegramView />
+                    </motion.div>
                   ) : activeTab === 'logs' ? (
                     <motion.div
                       key="logs"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
                     >
                       <LoginLogsView logs={loginLogs} />
@@ -758,6 +773,7 @@ export default function App(): ReactElement {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       style={{
                         height: '100%',
                         width: '100%',
