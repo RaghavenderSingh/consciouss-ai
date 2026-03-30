@@ -159,7 +159,7 @@ export default function CommandBar({
             style={{
               background: 'transparent',
               border: 'none',
-              color: isListening ? '#ef4444' : 'rgba(255,255,255,0.3)',
+              color: isListening ? '#FF4B33' : 'rgba(255,255,255,0.3)',
               padding: 6,
               cursor: 'pointer',
               display: 'flex'

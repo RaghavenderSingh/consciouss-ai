@@ -90,12 +90,12 @@ export default function OrbShader({ isListening, isWorking, size = 260 }: Props)
   // Determine colors based on state
   const colors = useMemo(() => {
     if (isWorking) {
-      return { 
-        a: '#FF8C00', // Deep Orange
-        b: '#FFD700', // Gold
+      return {
+        a: '#FF8F00', // Amber
+        b: '#FFB84D', // Gold
         highlight: '#FFFFFF',
-        glow: 'rgba(255,140,0,0.4)',
-        speed: 0.8 + amplitude * 1.5
+        glow: 'rgba(255, 143, 0, 0.4)',
+        speed: 1.2 + amplitude * 2.5
       }
     }
     if (isListening) {
@@ -107,12 +107,12 @@ export default function OrbShader({ isListening, isWorking, size = 260 }: Props)
         speed: 1.2 + amplitude * 2.5
       }
     }
-    // Idle
+    // Idle (Core Brand Neon)
     return {
-      a: '#FF2D55', // Raspberry
-      b: '#FF375F', // Soft Red
+      a: '#FF54B0', // Pink
+      b: '#FF4B33', // Red-Orange
       highlight: '#FFD1DC',
-      glow: 'rgba(255,45,85,0.3)',
+      glow: 'rgba(255, 84, 176, 0.35)',
       speed: 0.4 + amplitude * 1.0
     }
   }, [isListening, isWorking, amplitude])
