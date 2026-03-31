@@ -109,6 +109,7 @@ export interface WorkflowNodeData {
   payload: AIAction['payload'] & { delayMs?: number }
   status: 'idle' | 'running' | 'success' | 'error'
   error?: string
+  output?: string
   [key: string]: unknown
 }
 
@@ -144,4 +145,5 @@ export interface WorkflowProgress {
   nodeId: string
   status: 'running' | 'success' | 'error'
   error?: string
+  output?: string
 }

@@ -34,6 +34,7 @@ export default function WorkflowsView(): React.ReactElement {
               ...(n.data as WorkflowNodeData),
               status: data.status,
               error: data.error,
+              output: data.output,
             } as WorkflowNodeData,
           }
         }) as Node[]
@@ -97,10 +98,11 @@ export default function WorkflowsView(): React.ReactElement {
     setViewMode('editor')
   }
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (): Promise<string> => {
     const now = new Date().toISOString()
+    const id = activeWorkflow?.id || `wf_${Date.now()}`
     const wf: Workflow = {
-      id: activeWorkflow?.id || `wf_${Date.now()}`,
+      id,
       name: workflowName || 'Untitled Workflow',
       description: '',
       icon: '⚡',
@@ -128,12 +130,13 @@ export default function WorkflowsView(): React.ReactElement {
     } catch (err) {
       console.error('[WorkflowsView] Failed to save:', err)
     }
+    return id
   }, [nodes, edges, workflowName, activeWorkflow])
 
   const handleRun = useCallback(async () => {
-    if (!activeWorkflow?.id) {
-      await handleSave()
-    }
+    // Always save first to ensure the workflow exists on disk
+    const savedId = await handleSave()
+
     // Reset all node statuses
     setNodes((prev) =>
       prev.map((n) => ({
@@ -143,14 +146,13 @@ export default function WorkflowsView(): React.ReactElement {
     )
     setIsRunning(true)
     try {
-      const id = activeWorkflow?.id || `wf_${Date.now()}`
-      await window.electronAPI?.runWorkflow?.(id)
+      await window.electronAPI?.runWorkflow?.(savedId)
     } catch (err) {
       console.error('[WorkflowsView] Run failed:', err)
     } finally {
       setIsRunning(false)
     }
-  }, [activeWorkflow, handleSave])
+  }, [handleSave])
 
   const handleStop = useCallback(async () => {
     await window.electronAPI?.stopWorkflow?.()

@@ -742,10 +742,12 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
     })
 
     try {
+      let nodeOutput = ''
+
       // Execute based on action type
       switch (data.actionType) {
         case 'trigger':
-          // No-op, just marks start
+          nodeOutput = 'Workflow started'
           break
 
         case 'click': {
@@ -755,6 +757,9 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
             const { Point } = await import('@nut-tree-fork/nut-js')
             await mouse.setPosition(new Point(x, y))
             await mouse.leftClick()
+            nodeOutput = `Clicked at (${x}, ${y})`
+          } else {
+            nodeOutput = 'Skipped — no coordinates set'
           }
           break
         }
@@ -764,6 +769,9 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
           if (text) {
             const { keyboard } = await import('@nut-tree-fork/nut-js')
             await keyboard.type(text)
+            nodeOutput = `Typed: "${text}"`
+          } else {
+            nodeOutput = 'Skipped — no text set'
           }
           break
         }
@@ -777,6 +785,9 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
                 (err) => (err ? reject(err) : resolve())
               )
             })
+            nodeOutput = `Opened ${name}`
+          } else {
+            nodeOutput = 'Skipped — no app name set'
           }
           break
         }
@@ -794,6 +805,9 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
             } else {
               await shell.openExternal(url)
             }
+            nodeOutput = `Opened ${url}`
+          } else {
+            nodeOutput = 'Skipped — no URL set'
           }
           break
         }
@@ -801,9 +815,17 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
         case 'run_command': {
           const cmd = data.payload?.cmd
           if (cmd) {
-            await new Promise<void>((resolve, reject) => {
-              exec(cmd, { timeout: 15000 }, (err) => (err ? reject(err) : resolve()))
+            nodeOutput = await new Promise<string>((resolve, reject) => {
+              exec(cmd, { timeout: 15000 }, (err, stdout, stderr) => {
+                if (err) {
+                  reject(new Error(`${err.message}\n${stderr || ''}`))
+                } else {
+                  resolve(stdout?.trim() || stderr?.trim() || '(no output)')
+                }
+              })
             })
+          } else {
+            nodeOutput = 'Skipped — no command set'
           }
           break
         }
@@ -811,27 +833,35 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
         case 'applescript': {
           const script = data.payload?.script
           if (script) {
-            await new Promise<void>((resolve, reject) => {
-              exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, (err) =>
-                err ? reject(err) : resolve()
-              )
+            nodeOutput = await new Promise<string>((resolve, reject) => {
+              exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, (err, stdout, stderr) => {
+                if (err) {
+                  reject(new Error(`${err.message}\n${stderr || ''}`))
+                } else {
+                  resolve(stdout?.trim() || '(no output)')
+                }
+              })
             })
+          } else {
+            nodeOutput = 'Skipped — no script set'
           }
           break
         }
 
         case 'screenshot': {
-          // Just a small delay, screenshot is handled by the renderer
+          nodeOutput = 'Screenshot captured'
           break
         }
 
         case 'delay': {
           const ms = data.payload?.delayMs || 1000
           await new Promise((r) => setTimeout(r, ms))
+          nodeOutput = `Waited ${ms}ms`
           break
         }
 
         default:
+          nodeOutput = 'Unknown action'
           break
       }
 
@@ -840,6 +870,7 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
           workflowId: id,
           nodeId,
           status: 'success',
+          output: nodeOutput,
         })
       }
 
@@ -849,11 +880,13 @@ ipcMain.handle('workflow:run', async (_, id: string) => {
         await new Promise((r) => setTimeout(r, afterDelay))
       }
     } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err)
       mainWindow?.webContents.send('workflow:progress', {
         workflowId: id,
         nodeId,
         status: 'error',
-        error: err instanceof Error ? err.message : String(err),
+        error: errMsg,
+        output: `Error: ${errMsg}`,
       })
       break // Stop on error
     }

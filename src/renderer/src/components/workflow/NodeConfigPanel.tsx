@@ -103,6 +103,66 @@ export default function NodeConfigPanel({ nodeId, data, onUpdate, onClose }: Pro
             />
           </FieldGroup>
         )}
+
+        {/* Execution Result */}
+        {data.output && (data.status === 'success' || data.status === 'error') && (
+          <div style={{ marginTop: 8 }}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'rgba(255,255,255,0.35)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                marginBottom: 8,
+              }}
+            >
+              Last Execution
+            </div>
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: data.status === 'error'
+                  ? 'rgba(248,113,113,0.06)'
+                  : 'rgba(74,222,128,0.04)',
+                border: `1px solid ${data.status === 'error' ? 'rgba(248,113,113,0.12)' : 'rgba(74,222,128,0.1)'}`,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginBottom: 8,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: data.status === 'error' ? '#f87171' : '#4ade80',
+                }}
+              >
+                <span>{data.status === 'error' ? '✗' : '✓'}</span>
+                <span>{data.status === 'error' ? 'Failed' : 'Success'}</span>
+              </div>
+              <pre
+                style={{
+                  fontSize: 11,
+                  color: data.status === 'error'
+                    ? 'rgba(248,113,113,0.7)'
+                    : 'rgba(255,255,255,0.45)',
+                  fontFamily: 'monospace',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.5,
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                }}
+              >
+                {data.output}
+              </pre>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

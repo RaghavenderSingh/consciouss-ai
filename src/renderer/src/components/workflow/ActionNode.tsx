@@ -162,6 +162,51 @@ function ActionNodeComponent({ data, selected }: NodeProps) {
               {summary}
             </div>
           )}
+
+          {/* Execution output */}
+          {(isSuccess || isError) && nodeData.output && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 10px',
+                borderRadius: 8,
+                background: isError
+                  ? 'rgba(248,113,113,0.08)'
+                  : 'rgba(74,222,128,0.06)',
+                border: `1px solid ${isError ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.12)'}`,
+                maxHeight: 80,
+                overflowY: 'auto',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: isError ? '#f87171' : '#4ade80',
+                  marginBottom: 4,
+                }}
+              >
+                {isError ? '✗ Error' : '✓ Output'}
+              </div>
+              <pre
+                style={{
+                  fontSize: 10,
+                  color: isError
+                    ? 'rgba(248,113,113,0.8)'
+                    : 'rgba(255,255,255,0.5)',
+                  fontFamily: 'monospace',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.4,
+                }}
+              >
+                {nodeData.output.slice(0, 200)}{nodeData.output.length > 200 ? '…' : ''}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
 
