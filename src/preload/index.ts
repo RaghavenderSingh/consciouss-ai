@@ -88,6 +88,18 @@ const electronAPI = {
   onWakeShortcut: (callback: () => void): void => {
     ipcRenderer.removeAllListeners('wake-shortcut')
     ipcRenderer.on('wake-shortcut', () => callback())
+  },
+
+  // ─── Workflow Automation ─────────────────────────────────
+  listWorkflows: (): Promise<any[]> => ipcRenderer.invoke('workflow:list'),
+  saveWorkflow: (workflow: any): Promise<void> => ipcRenderer.invoke('workflow:save', workflow),
+  deleteWorkflow: (id: string): Promise<void> => ipcRenderer.invoke('workflow:delete', id),
+  runWorkflow: (id: string): Promise<void> => ipcRenderer.invoke('workflow:run', id),
+  stopWorkflow: (): Promise<void> => ipcRenderer.invoke('workflow:stop'),
+  onWorkflowProgress: (callback: (data: any) => void): (() => void) => {
+    const handler = (_: any, data: any) => callback(data)
+    ipcRenderer.on('workflow:progress', handler)
+    return () => { ipcRenderer.removeListener('workflow:progress', handler) }
   }
 }
 

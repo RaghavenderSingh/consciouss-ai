@@ -48,6 +48,14 @@ export interface ElectronBridge {
   onWakeShortcut(callback: () => void): void
   transcribeAudio(buffer: Uint8Array, mimeType: string): Promise<string>
   googleAuth(): Promise<{ id: string; name: string; email: string; avatarUrl: string; subscription: string }>
+
+  // Workflow Automation
+  listWorkflows(): Promise<any[]>
+  saveWorkflow(workflow: any): Promise<void>
+  deleteWorkflow(id: string): Promise<void>
+  runWorkflow(id: string): Promise<void>
+  stopWorkflow(): Promise<void>
+  onWorkflowProgress(callback: (data: any) => void): () => void
 }
 
 declare global {

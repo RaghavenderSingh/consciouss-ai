@@ -26,11 +26,13 @@
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node-telegram-bot-api": "^0.64.14",
+    "@xyflow/react": "^12.10.2",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
     "node-telegram-bot-api": "^0.67.0",
+    "react-icons": "^5.6.0",
     "shaders": "^2.5.85",
     "tailwindcss": "^4.2.2"
   },

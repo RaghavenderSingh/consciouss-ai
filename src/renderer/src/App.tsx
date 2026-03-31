@@ -13,6 +13,7 @@ import SpotlightBar from './components/SpotlightBar'
 import LoginView from './components/LoginView'
 import LoginLogsView from './components/LoginLogsView'
 import TelegramView from './components/TelegramView'
+import WorkflowsView from './components/WorkflowsView'
 
 import { useOpenRouter } from './hooks/useOpenRouter'
 import { useScreenCapture } from './hooks/useScreenCapture'
@@ -755,6 +756,17 @@ export default function App(): ReactElement {
                       style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
                     >
                       <TelegramView />
+                    </motion.div>
+                  ) : activeTab === 'workflows' ? (
+                    <motion.div
+                      key="workflows"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
+                    >
+                      <WorkflowsView />
                     </motion.div>
                   ) : activeTab === 'logs' ? (
                     <motion.div

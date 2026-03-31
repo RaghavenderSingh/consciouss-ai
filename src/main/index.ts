@@ -34,6 +34,7 @@ let telegramDiscoveryMode = false
 const MEMORY_PATH = join(app.getPath('userData'), 'memory.json')
 const CHATS_PATH = join(app.getPath('userData'), 'chats.json')
 const TELEGRAM_CONFIG_PATH = join(app.getPath('userData'), 'telegram_config.json')
+const WORKFLOWS_PATH = join(app.getPath('userData'), 'workflows.json')
 
 import type { ChatSession } from './types'
 
@@ -648,6 +649,231 @@ ipcMain.handle('write-chats', (_, sessions: ChatSession[]) => {
   } catch (err) {
     console.error('[Chats] write failed:', err)
   }
+})
+
+// ─── Workflow Automation ──────────────────────────────────────────────────────
+
+let workflowAbortController: AbortController | null = null
+
+function readWorkflows(): any[] {
+  try {
+    if (!existsSync(WORKFLOWS_PATH)) return []
+    return JSON.parse(readFileSync(WORKFLOWS_PATH, 'utf-8'))
+  } catch {
+    return []
+  }
+}
+
+function writeWorkflows(workflows: any[]): void {
+  writeFileSync(WORKFLOWS_PATH, JSON.stringify(workflows, null, 2))
+}
+
+ipcMain.handle('workflow:list', () => {
+  return readWorkflows()
+})
+
+ipcMain.handle('workflow:save', (_, workflow: any) => {
+  const workflows = readWorkflows()
+  const idx = workflows.findIndex((w: any) => w.id === workflow.id)
+  if (idx >= 0) {
+    workflows[idx] = workflow
+  } else {
+    workflows.push(workflow)
+  }
+  writeWorkflows(workflows)
+})
+
+ipcMain.handle('workflow:delete', (_, id: string) => {
+  const workflows = readWorkflows().filter((w: any) => w.id !== id)
+  writeWorkflows(workflows)
+})
+
+ipcMain.handle('workflow:run', async (_, id: string) => {
+  const workflows = readWorkflows()
+  const wf = workflows.find((w: any) => w.id === id)
+  if (!wf) throw new Error(`Workflow ${id} not found`)
+
+  workflowAbortController = new AbortController()
+  const signal = workflowAbortController.signal
+
+  // Build adjacency list from edges
+  const adj: Record<string, string[]> = {}
+  const inDegree: Record<string, number> = {}
+  for (const node of wf.nodes) {
+    adj[node.id] = []
+    inDegree[node.id] = 0
+  }
+  for (const edge of wf.edges) {
+    adj[edge.source] = adj[edge.source] || []
+    adj[edge.source].push(edge.target)
+    inDegree[edge.target] = (inDegree[edge.target] || 0) + 1
+  }
+
+  // Topological sort (Kahn's algorithm)
+  const queue: string[] = []
+  for (const nodeId of Object.keys(inDegree)) {
+    if (inDegree[nodeId] === 0) queue.push(nodeId)
+  }
+  const sorted: string[] = []
+  while (queue.length > 0) {
+    const curr = queue.shift()!
+    sorted.push(curr)
+    for (const next of (adj[curr] || [])) {
+      inDegree[next]--
+      if (inDegree[next] === 0) queue.push(next)
+    }
+  }
+
+  // Execute each node in order
+  const nodeMap: Record<string, any> = {}
+  for (const n of wf.nodes) nodeMap[n.id] = n
+
+  for (const nodeId of sorted) {
+    if (signal.aborted) break
+
+    const node = nodeMap[nodeId]
+    if (!node) continue
+
+    const data = node.data
+    mainWindow?.webContents.send('workflow:progress', {
+      workflowId: id,
+      nodeId,
+      status: 'running',
+    })
+
+    try {
+      // Execute based on action type
+      switch (data.actionType) {
+        case 'trigger':
+          // No-op, just marks start
+          break
+
+        case 'click': {
+          const { x, y } = data.payload || {}
+          if (x != null && y != null) {
+            const { mouse } = await import('@nut-tree-fork/nut-js')
+            const { Point } = await import('@nut-tree-fork/nut-js')
+            await mouse.setPosition(new Point(x, y))
+            await mouse.leftClick()
+          }
+          break
+        }
+
+        case 'type_text': {
+          const { text } = data.payload || {}
+          if (text) {
+            const { keyboard } = await import('@nut-tree-fork/nut-js')
+            await keyboard.type(text)
+          }
+          break
+        }
+
+        case 'open_app': {
+          const name = data.payload?.name || data.payload?.app_name
+          if (name) {
+            await new Promise<void>((resolve, reject) => {
+              exec(
+                `osascript -e 'tell application "${name}" to activate'`,
+                (err) => (err ? reject(err) : resolve())
+              )
+            })
+          }
+          break
+        }
+
+        case 'open_url': {
+          const { url, browser } = data.payload || {}
+          if (url) {
+            if (browser) {
+              await new Promise<void>((resolve, reject) => {
+                exec(
+                  `open -a "${browser}" "${url}"`,
+                  (err) => (err ? reject(err) : resolve())
+                )
+              })
+            } else {
+              await shell.openExternal(url)
+            }
+          }
+          break
+        }
+
+        case 'run_command': {
+          const cmd = data.payload?.cmd
+          if (cmd) {
+            await new Promise<void>((resolve, reject) => {
+              exec(cmd, { timeout: 15000 }, (err) => (err ? reject(err) : resolve()))
+            })
+          }
+          break
+        }
+
+        case 'applescript': {
+          const script = data.payload?.script
+          if (script) {
+            await new Promise<void>((resolve, reject) => {
+              exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, (err) =>
+                err ? reject(err) : resolve()
+              )
+            })
+          }
+          break
+        }
+
+        case 'screenshot': {
+          // Just a small delay, screenshot is handled by the renderer
+          break
+        }
+
+        case 'delay': {
+          const ms = data.payload?.delayMs || 1000
+          await new Promise((r) => setTimeout(r, ms))
+          break
+        }
+
+        default:
+          break
+      }
+
+      if (!signal.aborted) {
+        mainWindow?.webContents.send('workflow:progress', {
+          workflowId: id,
+          nodeId,
+          status: 'success',
+        })
+      }
+
+      // Post-step delay (unless it's already a delay node)
+      if (data.actionType !== 'delay' && data.actionType !== 'trigger') {
+        const afterDelay = data.payload?.delayMs || 800
+        await new Promise((r) => setTimeout(r, afterDelay))
+      }
+    } catch (err: unknown) {
+      mainWindow?.webContents.send('workflow:progress', {
+        workflowId: id,
+        nodeId,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      })
+      break // Stop on error
+    }
+  }
+
+  // Update run count
+  const updatedWorkflows = readWorkflows()
+  const wfIdx = updatedWorkflows.findIndex((w: any) => w.id === id)
+  if (wfIdx >= 0) {
+    updatedWorkflows[wfIdx].runCount = (updatedWorkflows[wfIdx].runCount || 0) + 1
+    updatedWorkflows[wfIdx].lastRunAt = new Date().toISOString()
+    writeWorkflows(updatedWorkflows)
+  }
+
+  workflowAbortController = null
+})
+
+ipcMain.handle('workflow:stop', () => {
+  workflowAbortController?.abort()
+  workflowAbortController = null
 })
 
 // ─── Create window ────────────────────────────────────────────────────────────
