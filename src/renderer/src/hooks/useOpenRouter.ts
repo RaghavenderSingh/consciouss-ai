@@ -89,6 +89,7 @@ AppleScript Music patterns (Robust):
 
 AppleScript Notes patterns (Robust):
 - IMPORTANT: When asked to write a note, YOU MUST GENERATE the actual meaningful content and put it in the "body" property. Do NOT just copy the user's prompt as the name.
+- CRITICAL ESCAPING: AppleScript strings MUST be enclosed in double quotes ("). If you need quotes inside your generated body text, omit them entirely or use single quotes (') for the inner text. Do NOT break the outer double quotes. Never use raw line breaks, keep it as one long single line.
 - Create/Show: tell application "Notes"\n  activate\n  tell account "iCloud"\n    set n to make new note with properties {name:"A Relevant Title", body:"The fully generated content goes here..."}\n    show n\n  end tell\nend tell
 
 TASK CONTINUITY RULES (IMPORTANT):
@@ -171,6 +172,7 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
           body: JSON.stringify({
             model: localStorage.getItem('consciouss_model') || 'google/gemini-2.0-flash-001',
             stream: true,
+            max_tokens: 1024,
             messages: [
               { role: 'system', content: systemPromptWithContext },
               ...historyMessages,

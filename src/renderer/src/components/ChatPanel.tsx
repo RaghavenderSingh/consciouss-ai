@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Message } from '../types'
 import ContextStrip, { ActiveApp } from './ContextStrip'
+import ActionBadge from './ActionBadge'
 
 interface Props {
   messages: Message[]
@@ -90,6 +91,55 @@ function AgentBubble({
   )
 }
 
+// ── Agent message block — wraps bubble + action badge ─────────────────────────
+function AgentMessageBlock({
+  msg,
+  isCompact
+}: {
+  msg: Message
+  isCompact?: boolean
+}): React.ReactElement {
+  const hasAction = msg.action && msg.action.type !== 'none'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        marginBottom: hasAction ? 8 : 16,
+        maxWidth: isCompact ? '90%' : '80%'
+      }}
+    >
+      <div
+        style={{
+          borderRadius: '24px 24px 24px 4px',
+          padding: '14px 20px',
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: 'rgba(255,255,255,0.9)',
+          fontWeight: 400,
+          background: 'rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(255, 255, 255, 0.04)',
+          letterSpacing: '0.01em',
+          width: '100%'
+        }}
+      >
+        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+      </div>
+
+      <AnimatePresence>
+        {hasAction && (
+          <ActionBadge action={msg.action!} status={msg.actionStatus} />
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
 export default function ChatPanel({
   messages,
   isStreaming,
@@ -160,7 +210,7 @@ export default function ChatPanel({
             msg.role === 'user' ? (
               <UserBubble key={msg.id} content={msg.content} />
             ) : (
-              <AgentBubble key={msg.id} content={msg.content} />
+              <AgentMessageBlock key={msg.id} msg={msg} isCompact={isCompact} />
             )
           )}
           {isStreaming && streamingText && (
