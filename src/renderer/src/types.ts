@@ -140,6 +140,16 @@ export interface Workflow {
   runCount: number
 }
 
+export interface AXElement {
+  role: string
+  title: string
+  description: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface WorkflowProgress {
   workflowId: string
   nodeId: string

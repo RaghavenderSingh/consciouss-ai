@@ -1,146 +1,121 @@
-# Consciouss AI
+# 🌌 Consciouss AI
 
-An AI-powered desktop agent for macOS that sees your screen, understands your commands via text or voice, and autonomously controls your computer to complete tasks.
-
----
-
-## Features
-
-- **Screen Understanding** — Captures and analyzes your screen using Google Gemini 2.0 Flash via OpenRouter
-- **Voice Input** — Record audio and transcribe commands using Groq Whisper
-- **Computer Control** — Clicks, types, runs shell commands, launches apps, opens URLs, and executes AppleScript
-- **Multi-Display Support** — Handles multiple monitors with automatic screen stitching
-- **Telegram Integration** — Receive commands and send screenshots via a Telegram bot
-- **Google OAuth** — Sign in with Google for user session tracking
-- **Task Looping** — AI autonomously loops up to 5 times to complete complex multi-step tasks
-- **Global Hotkey** — `Cmd+Shift+Space` to activate from anywhere
-- **Multiple UI Modes** — Full, companion sidebar, spotlight, and minimal pill modes
+**The Intelligence Layer for macOS**
+An autonomous AI agent with a **Liquid-Glass** aesthetic that sees your screen, understands your voice, and controls your computer with precision.
 
 ---
 
-## Tech Stack
+## ✨ Features
 
-- **Electron** + **React** + **TypeScript**
-- **TailwindCSS** + **Framer Motion** for UI
-- **OpenRouter API** — Google Gemini 2.0 Flash (AI reasoning)
-- **Groq API** — Whisper (voice transcription)
-- **nut.js** — Mouse, keyboard, and input automation
-- **AppleScript** — macOS browser and app control
-- **Telegram Bot API** — Remote command interface
-- **Google OAuth** — Authentication
-
----
-
-## Prerequisites
-
-- macOS (primary platform)
-- Node.js 18+
-- API keys (see [Environment Variables](#environment-variables))
-
-**Enable AppleScript browser control** (for Chrome/Brave):
-1. Open Chrome or Brave
-2. Menu bar → **View** → **Developer**
-3. Check **Allow JavaScript from Apple Events**
+- **💎 Liquid-Glass Interface** — A premium, high-fidelity UI with deep-ruby brand tones, multi-layered glassmorphism, and dynamic animations.
+- **👁️ Vision-Driven Reasoning** — Powered by **Google Gemini 2.0 Flash** (via OpenRouter), capturing and analyzing multi-display environments in real-time.
+- **🦀 High-Performance Rust Core** — A native automation engine built in Rust for ultra-fast window management, screen capture, and sub-millisecond input control.
+- **🎙️ Voice Intelligence** — Natural language interaction using **Groq Whisper** for near-instant transcription.
+- **📱 Remote Command Center** — Fully integrated **Telegram Bot** with a seamless "Guided Setup" wizard for remote screen monitoring and control.
+- **🎭 Audio-Reactive Presence** — A sophisticated, shader-based **Blob/Orb** UI that pulses and reacts to system state and voice input.
+- **🤖 Autonomous Task Loops** — Self-correcting AI loops that execute multi-step workflows until the goal is achieved.
+- **⚡ Spotlight Integration** — Activate instantly with `Cmd+Shift+Space`.
 
 ---
 
-## Setup
+## 🛠️ Tech Stack
 
-### 1. Install dependencies
+- **Frameworks**: [Electron](https://www.electronjs.org/) + [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- **Native Layer**: [Rust](https://www.rust-lang.org/) (via [NAPI-RS](https://napi.rs/)) for low-level OS hook integration.
+- **Styling**: [TailwindCSS 4](https://tailwindcss.com/) + [Framer Motion](https://www.framer.com/motion/) + Custom GLSL Shaders.
+- **AI Engines**:
+    - **Reasoning**: Gemini 2.0 Flash (OpenRouter)
+    - **Speech**: Groq Whisper
+- **Automation**: Custom Rust Native Engine + [nut.js](https://nut-tree.github.io/) fork.
+- **Messaging**: [Node Telegram Bot API](https://github.com/yagop/node-telegram-bot-api).
 
-```bash
-npm install
-```
+---
 
-### 2. Configure environment variables
+## 🚀 Getting Started
 
-Create a `.env` file in the project root:
+### Prerequisites
+
+- **macOS** (Optimized for Apple Silicon / Intel)
+- **Node.js 20+**
+- **API Keys** (See [.env Configuration](#-env-configuration))
+
+> [!TIP]
+> To enable browser automation in Chrome/Brave:
+> 1. Open Terminal and run: `defaults write com.google.Chrome AllowJavaScriptFromAppleEvents -bool true`
+> 2. Or manually: **View** → **Developer** → **Allow JavaScript from Apple Events**.
+
+### Installation
+
+1. **Clone & Install**:
+   ```bash
+   git clone https://github.com/your-username/consciouss-ai.git
+   cd consciouss-ai
+   npm install
+   ```
+
+2. **Native Module**:
+   The project includes a pre-built Rust binary for `darwin-arm64`. To rebuild for your specific architecture:
+   ```bash
+   cd native
+   npm install
+   npm run build
+   ```
+   *(Requires Rust toolchain installed: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)*
+
+---
+
+## 🔑 .env Configuration
+
+Create a `.env` file in the root directory:
 
 ```env
-VITE_OPENROUTER_KEY=sk-or-v1-your-key-here
-VITE_GROQ_API_KEY=gsk_your-groq-key-here
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
+VITE_OPENROUTER_KEY=sk-or-v1-xxx...
+VITE_GROQ_API_KEY=gsk_xxx...
+TELEGRAM_BOT_TOKEN=xxx:yyy...
+TELEGRAM_CHAT_ID=12345678
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
+GOOGLE_CLIENT_SECRET=GOCSPX-xxx
 ```
 
-| Variable | Where to get it |
-|---|---|
-| `VITE_OPENROUTER_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `VITE_GROQ_API_KEY` | [console.groq.com/keys](https://console.groq.com/keys) |
-| `TELEGRAM_BOT_TOKEN` | Message [@BotFather](https://t.me/BotFather) on Telegram |
-| `TELEGRAM_CHAT_ID` | Your Telegram chat ID (only this ID can send commands) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console → OAuth 2.0 credentials (Desktop app) |
-
-### 3. Grant macOS permissions
-
-On first launch, grant **Microphone** and **Screen Recording** permissions when prompted.
+| Key | Purpose | Source |
+|---|---|---|
+| `VITE_OPENROUTER_KEY` | Gemini 2.0 Flash AI reasoning | [OpenRouter](https://openrouter.ai/) |
+| `VITE_GROQ_API_KEY` | Whisper Voice-to-Text | [Groq Console](https://console.groq.com/) |
+| `TELEGRAM_BOT_TOKEN` | Remote interaction bot | [@BotFather](https://t.me/BotFather) |
+| `GOOGLE_CLIENT_ID` | User authentication | [Google Cloud](https://console.cloud.google.com/) |
 
 ---
 
-## Development
+## 📂 Project Structure
 
+```text
+consciouss-ai/
+├── src/
+│   ├── main/          # Electron main-process (Bridge, OS APIs, Telegram)
+│   ├── preload/       # Security layer for IPC communication
+│   └── renderer/      # React application (UI, Shaders, AI Hooks)
+├── native/            # Rust native automation engine (NAPI-RS)
+├── resources/         # Static assets and brand icons
+└── build/             # Production distribution artifacts
+```
+
+---
+
+## ⌨️ Development & Build
+
+### Development Mode
 ```bash
 npm run dev
 ```
 
-Starts Electron with hot-reload. DevTools open automatically.
-
----
-
-## Build
-
+### Production Build
 ```bash
-# macOS
-npm run build:mac
-
-# Windows
-npm run build:win
-
-# Linux
-npm run build:linux
+npm run build:mac   # Build .dmg for macOS
+npm run build:win   # Build .exe for Windows
 ```
 
 ---
 
-## How It Works
+## 📄 License
 
-1. User submits a text or voice command
-2. A screenshot is captured from all displays
-3. Screenshot + command + chat history is sent to Gemini via OpenRouter
-4. AI responds with a structured action (`click`, `type`, `open_app`, `shell`, etc.)
-5. The action is executed on your machine
-6. If `continue_task: true`, the loop repeats (up to 5 times) with an 8s delay
-7. Result is shown in the chat panel
-
----
-
-## Project Structure
-
-```
-src/
-├── main/           # Electron main process (IPC, OS control, Telegram, auth)
-├── preload/        # Context-isolated bridge (exposes IPC to renderer)
-└── renderer/
-    └── src/
-        ├── components/   # React UI components
-        ├── hooks/        # useOpenRouter, useScreenCapture, useVoiceInput
-        ├── lib/          # actions.ts — executes AI-generated actions
-        └── types.ts      # Shared TypeScript types
-```
-
----
-
-## Scripts
-
-| Command | Description |
-|---|---|
-| `npm run dev` | Start in development mode |
-| `npm run build` | Production build |
-| `npm run build:mac` | Build macOS .dmg |
-| `npm run build:win` | Build Windows installer |
-| `npm run build:linux` | Build Linux packages |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Format with Prettier |
+Proprietary. All rights reserved.

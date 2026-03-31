@@ -100,7 +100,23 @@ const electronAPI = {
     const handler = (_: any, data: any) => callback(data)
     ipcRenderer.on('workflow:progress', handler)
     return () => { ipcRenderer.removeListener('workflow:progress', handler) }
-  }
+  },
+
+  // ─── Native Rust-Powered APIs ───────────────────────────
+  listWindows: (): Promise<any[]> => ipcRenderer.invoke('list-windows'),
+  getFrontmostApp: (): Promise<string> => ipcRenderer.invoke('get-frontmost-app'),
+  isAccessibilityTrusted: (): Promise<boolean> => ipcRenderer.invoke('is-accessibility-trusted'),
+  getFrontmostAppPid: (): Promise<number> => ipcRenderer.invoke('get-frontmost-app-pid'),
+  listUIElements: (pid: number, depth?: number): Promise<any[]> =>
+    ipcRenderer.invoke('list-ui-elements', pid, depth),
+  clipboardRead: (): Promise<string> => ipcRenderer.invoke('clipboard-read'),
+  clipboardWrite: (text: string): Promise<void> => ipcRenderer.invoke('clipboard-write', { text }),
+  nativeNotify: (title: string, body: string): Promise<void> =>
+    ipcRenderer.invoke('native-notify', { title, body }),
+  systemInfo: (): Promise<any> => ipcRenderer.invoke('system-info'),
+  nativeCaptureScreen: (displayIndex?: number): Promise<string> =>
+    ipcRenderer.invoke('native-capture-screen', { displayIndex }),
+  displayInfo: (): Promise<any> => ipcRenderer.invoke('display-info')
 }
 
 if (process.contextIsolated) {

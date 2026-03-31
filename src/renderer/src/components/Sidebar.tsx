@@ -12,8 +12,8 @@ interface Props {
   onSelectSession: (id: string) => void
   onDeleteSession: (id: string, e?: React.MouseEvent) => void
   onClearAll: () => void
-  activeTab: 'chats' | 'workflows' | 'logs' | 'telegram'
-  onTabChange: (tab: 'chats' | 'workflows' | 'logs' | 'telegram') => void
+  activeTab: 'chats' | 'workflows' | 'logs' | 'telegram' | 'lab'
+  onTabChange: (tab: 'chats' | 'workflows' | 'logs' | 'telegram' | 'lab') => void
   user?: User | null
   onLogout?: () => void
 }
@@ -279,6 +279,14 @@ export default function Sidebar({
               onClick={() => onTabChange('telegram')}
               isCollapsed={isCollapsed}
               active={activeTab === 'telegram'}
+              brandActive
+            />
+            <NavItem
+              label="Native Lab"
+              icon={<Activity size={18} strokeWidth={2.5} />}
+              onClick={() => onTabChange('lab')}
+              isCollapsed={isCollapsed}
+              active={activeTab === 'lab'}
               brandActive
             />
           </div>

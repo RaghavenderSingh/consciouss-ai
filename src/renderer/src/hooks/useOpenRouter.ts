@@ -61,16 +61,20 @@ ROBUST BROWSER LOGIC (CRITICAL):
    Wrap both in the standard Brave/Chrome window check:
      tell application "Brave Browser"
        if it is running then
-         activate
-         if (count of windows) > 0 then
-           execute front window's active tab javascript "..."
-         end if
-       end if
-     end tell
-   - Replace "Brave Browser" with "Google Chrome" if that is what is on screen.
+        if it is running then
+          activate
+          if (count of windows) > 0 then
+            execute front window's active tab javascript "..."
+          end if
+        end if
+      end tell
+    - Replace "Brave Browser" with "Google Chrome" if that is what is on screen.
 
-4. GENERIC MEDIA KEY (FINAL FALLBACK): If browser/Music app logic fails, use this to trigger the system-wide Play/Pause:
-   tell application "System Events" to key code 103
+5. ACCESSIBILITY ENGINE (NEW):
+   - You will sometimes receive a list of "Detected UI Elements" for the active application.
+   - Use these coordinates [x, y, w, h] for pinpoint accuracy when using the 'click' action.
+   - The 'click' action (x, y) should target the CENTER of the element's bounding box.
+   - If an element title matches the user's intent (e.g. "Submit", "Login"), ALWAYS prefer its coordinates over raw visual estimation.
 
 AppleScript Music patterns (Robust):
 - To play a specific song/artist:
@@ -98,7 +102,8 @@ interface UseOpenRouterReturn {
     text: string,
     screenshot?: string | null,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
-    memoryContext?: string | null
+    memoryContext?: string | null,
+    uiContext?: string | null
   ) => Promise<AIResponse | null>
   isStreaming: boolean
   streamingText: string
@@ -121,7 +126,8 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
       text: string,
       screenshot?: string | null,
       history?: Array<{ role: 'user' | 'assistant'; content: string }>,
-      memoryContext?: string | null
+      memoryContext?: string | null,
+      uiContext?: string | null
     ): Promise<AIResponse | null> => {
       const apiKey = import.meta.env.VITE_OPENROUTER_KEY
       if (!apiKey) {
@@ -136,11 +142,10 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
       setStreamingText('')
       setError(null)
 
-      // Build system prompt with memory context
-      const systemPromptWithMemory =
-        SYSTEM_PROMPT + (memoryContext ? `\n\nPrevious session context:\n${memoryContext}` : '')
-
-      // Build history messages
+      // Build system prompt with memory context and UI context
+      let systemPromptWithContext = SYSTEM_PROMPT 
+      if (memoryContext) systemPromptWithContext += `\n\nPrevious session context:\n${memoryContext}`
+      if (uiContext) systemPromptWithContext += `\n\n${uiContext}`
       const historyMessages = (history || []).map((msg) => ({
         role: msg.role,
         content: [{ type: 'text', text: msg.content }]
@@ -167,7 +172,7 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
             model: MODEL,
             stream: true,
             messages: [
-              { role: 'system', content: systemPromptWithMemory },
+              { role: 'system', content: systemPromptWithContext },
               ...historyMessages,
               { role: 'user', content: userContent }
             ]

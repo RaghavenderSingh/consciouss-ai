@@ -56,6 +56,46 @@ export interface ElectronBridge {
   runWorkflow(id: string): Promise<void>
   stopWorkflow(): Promise<void>
   onWorkflowProgress(callback: (data: any) => void): () => void
+
+  // Native Rust-Powered APIs
+  listWindows(): Promise<Array<{
+    pid: number
+    appName: string
+    title: string
+    x: number
+    y: number
+    width: number
+    height: number
+    layer: number
+    isOnScreen: boolean
+  }>>
+  getFrontmostApp(): Promise<string>
+  isAccessibilityTrusted(): Promise<boolean>
+  getFrontmostAppPid(): Promise<number>
+  listUIElements(pid: number, depth?: number): Promise<any[]>
+  clipboardRead(): Promise<string>
+  clipboardWrite(text: string): Promise<void>
+  nativeNotify(title: string, body: string): Promise<void>
+  systemInfo(): Promise<{
+    cpuBrand: string
+    cpuCount: number
+    memTotalMb: number
+    memUsedMb: number
+    osVersion: string
+    hostname: string
+  }>
+  nativeCaptureScreen(displayIndex?: number): Promise<string>
+  displayInfo(): Promise<{
+    count: number
+    displays: Array<{
+      id: number
+      x: number
+      y: number
+      width: number
+      height: number
+      isMain: boolean
+    }>
+  }>
 }
 
 declare global {

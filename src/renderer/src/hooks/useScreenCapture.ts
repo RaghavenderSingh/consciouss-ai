@@ -75,9 +75,19 @@ export function useScreenCapture(isCallActive = false): UseScreenCaptureReturn {
   const startCapture = useCallback(() => {
     if (intervalRef.current) return
     setIsCapturing(true)
-    capture() // immediate first capture
+    
+    const shouldRunCapture = () => document.hasFocus() || isCallActive
+
+    if (shouldRunCapture()) {
+      capture() // immediate first capture
+    }
+
     const ms = isCallActive ? INTERVAL_CALL : INTERVAL_NORMAL
-    intervalRef.current = setInterval(capture, ms)
+    intervalRef.current = setInterval(() => {
+      if (shouldRunCapture()) {
+        capture()
+      }
+    }, ms)
   }, [capture, isCallActive])
 
   const stopCapture = useCallback(() => {
