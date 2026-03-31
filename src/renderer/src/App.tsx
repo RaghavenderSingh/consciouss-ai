@@ -372,7 +372,7 @@ export default function App(): ReactElement {
 
           while (current.continue_task && loopCount < MAX_LOOPS) {
             loopCount++
-            await new Promise((r) => setTimeout(r, 8000))
+            await new Promise((r) => setTimeout(r, 2000))
 
             let freshScreenshot: string | null = null
             try {

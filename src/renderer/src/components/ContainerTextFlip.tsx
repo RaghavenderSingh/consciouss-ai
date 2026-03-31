@@ -20,26 +20,25 @@ export function ContainerTextFlip({
   const [currentWordIndex, setCurrentWordIndex] = useState(0)
   const [width, setWidth] = useState(100)
   const textRef = useRef<HTMLDivElement>(null)
+  const wordsRef = useRef(words)
 
   const updateWidthForWord = (): void => {
     if (textRef.current) {
-      // Add padding (30px on each side = 60px, but user said 30 in total)
       const textWidth = textRef.current.scrollWidth + 30
       setWidth(textWidth)
     }
   }
 
   useEffect(() => {
-    // Need a tiny delay for React to flush the DOM with the new word so we can measure scrollWidth
     setTimeout(updateWidthForWord, 10)
   }, [currentWordIndex])
 
   useEffect(() => {
     const intervalId = setInterval(() => {
-      setCurrentWordIndex((prevIndex) => (prevIndex + 1) % words.length)
+      setCurrentWordIndex((prevIndex) => (prevIndex + 1) % wordsRef.current.length)
     }, interval)
     return () => clearInterval(intervalId)
-  }, [words, interval])
+  }, [interval])
 
   return (
     <motion.span
@@ -62,7 +61,7 @@ export function ContainerTextFlip({
         color: '#fff',
         ...style
       }}
-      key={words[currentWordIndex]}
+      key={wordsRef.current[currentWordIndex]}
     >
       <motion.div
         transition={{
@@ -75,10 +74,10 @@ export function ContainerTextFlip({
           ...textStyle
         }}
         ref={textRef}
-        layoutId={`word-div-${words[currentWordIndex]}-${id}`}
+        layoutId={`word-div-${wordsRef.current[currentWordIndex]}-${id}`}
       >
         <motion.div style={{ display: 'inline-block' }}>
-          {words[currentWordIndex].split('').map((letter, index) => (
+          {wordsRef.current[currentWordIndex].split('').map((letter, index) => (
             <motion.span
               key={index}
               initial={{
