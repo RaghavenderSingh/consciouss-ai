@@ -5,6 +5,9 @@ import { ContainerTextFlip } from './ContainerTextFlip'
 import OrbShader from './OrbShader'
 
 
+
+
+
 interface Props {
   onSubmit: (text: string) => void
   isListening: boolean
@@ -104,6 +107,8 @@ export default function HomeView({
             placeholder="Type @ to ask questions about your browser tabs"
           />
         </motion.div>
+
+
       </div>
     </div>
   )

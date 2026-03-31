@@ -25,6 +25,7 @@ export default function CommandBar({
   onNewChat
 }: Props): React.ReactElement {
   const [value, setValue] = useState('')
+  const [model, setModel] = useState(() => localStorage.getItem('consciouss_model') || 'google/gemini-2.0-flash-001')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -138,6 +139,34 @@ export default function CommandBar({
             marginRight: 8
           }}
         >
+          {/* Model Selector */}
+          <select
+            value={model}
+            onChange={(e) => {
+              setModel(e.target.value)
+              localStorage.setItem('consciouss_model', e.target.value)
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'rgba(255,255,255,0.4)',
+              cursor: 'pointer',
+              fontSize: 12,
+              padding: '6px 4px',
+              fontFamily: 'inherit',
+              appearance: 'none',
+              WebkitAppearance: 'none'
+            }}
+          >
+            <option value="google/gemini-2.0-flash-001">Gemini Flash</option>
+            <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini Pro</option>
+            <option value="anthropic/claude-3.5-sonnet">Claude Sonnet</option>
+            <option value="openai/gpt-4o">GPT-4o</option>
+          </select>
+
+          <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.06)' }} />
+
           <button
             onClick={onNewChat}
             style={{

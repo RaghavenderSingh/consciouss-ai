@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { AIResponse } from '../types'
 
-const MODEL = 'google/gemini-2.0-flash-001'
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 const SYSTEM_PROMPT = `You are Consciouss, an AI agent built into macOS. You can see the user's screen and control their computer.
@@ -89,7 +88,8 @@ AppleScript Music patterns (Robust):
 - Play a song by name: tell application "Music"\n  activate\n  try\n    play (first track of library playlist 1 whose name contains "SONG_NAME")\n  on error\n    open location "https://www.youtube.com/results?search_query=SONG_NAME"\n  end try\nend tell
 
 AppleScript Notes patterns (Robust):
-- Create/Show: tell application "Notes"\n  activate\n  tell account "iCloud"\n    set n to make new note with properties {name:"Title", body:"Body text"}\n    show n\n  end tell\nend tell
+- IMPORTANT: When asked to write a note, YOU MUST GENERATE the actual meaningful content and put it in the "body" property. Do NOT just copy the user's prompt as the name.
+- Create/Show: tell application "Notes"\n  activate\n  tell account "iCloud"\n    set n to make new note with properties {name:"A Relevant Title", body:"The fully generated content goes here..."}\n    show n\n  end tell\nend tell
 
 TASK CONTINUITY RULES (IMPORTANT):
 1. MULTI-STEP TASKS: If the user asks to "Play a song", "Search for X", or anything that requires navigating first, you MUST set "continue_task": true after the first action (e.g., after opening the URL).
@@ -169,7 +169,7 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
             'X-Title': 'ConscioussAI'
           },
           body: JSON.stringify({
-            model: MODEL,
+            model: localStorage.getItem('consciouss_model') || 'google/gemini-2.0-flash-001',
             stream: true,
             messages: [
               { role: 'system', content: systemPromptWithContext },
