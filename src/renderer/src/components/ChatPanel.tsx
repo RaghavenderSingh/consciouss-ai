@@ -128,7 +128,24 @@ function AgentMessageBlock({
           width: '100%'
         }}
       >
-        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+        <div style={{ position: 'relative' }}>
+          {msg.agent && (
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                color: '#FF54B0',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                marginBottom: 6,
+                opacity: 0.8
+              }}
+            >
+              {msg.agent}
+            </div>
+          )}
+          <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+        </div>
       </div>
 
       <AnimatePresence>

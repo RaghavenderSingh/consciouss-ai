@@ -18,6 +18,7 @@ pub struct AXElement {
     pub role: String,
     pub title: String,
     pub description: String,
+    pub value: String,
     pub x: f64,
     pub y: f64,
     pub width: f64,
@@ -58,7 +59,8 @@ unsafe fn traverse_ui_tree(
 
     // 1. Extract Interesting Attributes
     let role = get_attribute_string(element, "AXRole").unwrap_or_else(|| "unknown".to_string());
-    let title = get_attribute_string(element, "AXTitle").unwrap_or_default();
+    let title = get_attribute_string(element, "AXValue").unwrap_or_else(|| get_attribute_string(element, "AXTitle").unwrap_or_default());
+    let value = get_attribute_string(element, "AXValue").unwrap_or_default();
     let description = get_attribute_string(element, "AXDescription").unwrap_or_default();
     let (x, y, w, h) = get_element_frame(element).unwrap_or((0.0, 0.0, 0.0, 0.0));
 
@@ -66,18 +68,19 @@ unsafe fn traverse_ui_tree(
     // We keep elements that have a title/description or specific roles
     let is_important = !title.is_empty() 
         || !description.is_empty() 
+        || !value.is_empty()
         || role.contains("Button") 
         || role.contains("TextField") 
+        || role.contains("TextArea")
         || role.contains("Link") 
-        || role.contains("StaticText")
-        || role.contains("CheckBox")
-        || role.contains("RadioButton");
+        || role.contains("StaticText");
 
     if is_important && w > 2.0 && h > 2.0 {
         elements.push(AXElement {
             role,
             title,
             description,
+            value,
             x,
             y,
             width: w,

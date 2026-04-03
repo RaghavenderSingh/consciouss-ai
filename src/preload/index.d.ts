@@ -83,6 +83,7 @@ export interface ElectronBridge {
     memUsedMb: number
     osVersion: string
     hostname: string
+    cwd: string
   }>
   nativeCaptureScreen(displayIndex?: number): Promise<string>
   displayInfo(): Promise<{
@@ -96,6 +97,12 @@ export interface ElectronBridge {
       isMain: boolean
     }>
   }>
+
+  // Attention Telemetry
+  getMouseLocation(): Promise<{ x: number; y: number }>
+  getSystemIdleTime(): Promise<number>
+  attentionFocus(data: any): Promise<void>
+  onHudFocus(callback: (data: any) => void): void
 }
 
 declare global {

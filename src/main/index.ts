@@ -29,6 +29,7 @@ const native = require(join(__dirname, '../../native/index.js'))
 
 
 let mainWindow: BrowserWindow | null = null
+let hudWindow: BrowserWindow | null = null
 let telegramBot: TelegramBot | null = null
 let telegramDiscoveryMode = false
 
@@ -454,6 +455,19 @@ ipcMain.handle('display-info', () => {
     count: native.getDisplayCount(),
     displays: native.getDisplayBounds()
   }
+})
+
+// 17. Attention Telemetry
+ipcMain.handle('get-mouse-location', () => {
+  return native.getMouseLocation()
+})
+
+ipcMain.handle('get-system-idle-time', () => {
+  return native.getSystemIdleTime()
+})
+
+ipcMain.handle('attention-focus', (_, data: any) => {
+  hudWindow?.webContents.send('hud-focus', data)
 })
 
 // ── Audio transcription via Groq Whisper ──────────────────────────────────────
@@ -983,6 +997,36 @@ function createWindow(): void {
   }
 }
 
+function createHudWindow(): void {
+  const { width, height } = screen.getPrimaryDisplay().bounds
+
+  hudWindow = new BrowserWindow({
+    width,
+    height,
+    x: 0,
+    y: 0,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    hasShadow: false,
+    enableLargerThanScreen: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true
+    }
+  })
+
+  hudWindow.setIgnoreMouseEvents(true, { forward: true })
+  hudWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    hudWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#hud`)
+  } else {
+    hudWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'hud' })
+  }
+}
+
 // ─── Native Menu setup ────────────────────────────────────────────────────────
 function setupMenu(): void {
   const isMac = process.platform === 'darwin'
@@ -1094,6 +1138,7 @@ app.whenReady().then(async () => {
   })
 
   createWindow()
+  createHudWindow()
   initTelegram()
   setupMenu()
 

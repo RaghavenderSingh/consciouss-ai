@@ -79,6 +79,10 @@ export async function executeAction(
         return result
       }
 
+      case 'orchestrate_task':
+        // Orchestrator handles this natively, silent no-op here
+        break
+
       case 'none':
         break
 

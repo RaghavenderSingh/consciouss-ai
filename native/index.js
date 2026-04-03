@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { click, rightClick, doubleClick, moveMouse, drag, scroll, typeText, keyPress, keyCombo, getDisplayCount, getDisplayBounds, captureScreen, captureRegion, getPixelColor, listWindows, getFrontmostApp, getFrontmostAppPid, activateApp, clipboardRead, clipboardWrite, notify, getSystemInfo, execCommand, isAccessibilityTrusted, listUiElements } = nativeBinding
+const { click, rightClick, doubleClick, moveMouse, drag, scroll, typeText, keyPress, keyCombo, getDisplayCount, getDisplayBounds, captureScreen, captureRegion, getPixelColor, listWindows, getFrontmostApp, getFrontmostAppPid, activateApp, clipboardRead, clipboardWrite, notify, getSystemInfo, execCommand, isAccessibilityTrusted, listUiElements, getMouseLocation, getSystemIdleTime } = nativeBinding
 
 module.exports.click = click
 module.exports.rightClick = rightClick
@@ -337,3 +337,5 @@ module.exports.getSystemInfo = getSystemInfo
 module.exports.execCommand = execCommand
 module.exports.isAccessibilityTrusted = isAccessibilityTrusted
 module.exports.listUiElements = listUiElements
+module.exports.getMouseLocation = getMouseLocation
+module.exports.getSystemIdleTime = getSystemIdleTime

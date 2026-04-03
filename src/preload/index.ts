@@ -116,7 +116,16 @@ const electronAPI = {
   systemInfo: (): Promise<any> => ipcRenderer.invoke('system-info'),
   nativeCaptureScreen: (displayIndex?: number): Promise<string> =>
     ipcRenderer.invoke('native-capture-screen', { displayIndex }),
-  displayInfo: (): Promise<any> => ipcRenderer.invoke('display-info')
+  displayInfo: (): Promise<any> => ipcRenderer.invoke('display-info'),
+
+  // Attention Telemetry
+  getMouseLocation: (): Promise<{ x: number; y: number }> => ipcRenderer.invoke('get-mouse-location'),
+  getSystemIdleTime: (): Promise<number> => ipcRenderer.invoke('get-system-idle-time'),
+  attentionFocus: (data: any): Promise<void> => ipcRenderer.invoke('attention-focus', data),
+  onHudFocus: (callback: (data: any) => void): void => {
+    ipcRenderer.removeAllListeners('hud-focus')
+    ipcRenderer.on('hud-focus', (_, data) => callback(data))
+  }
 }
 
 if (process.contextIsolated) {

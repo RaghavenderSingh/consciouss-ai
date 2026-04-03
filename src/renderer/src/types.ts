@@ -7,6 +7,7 @@ export interface Message {
   timestamp: Date
   action?: AIAction
   actionStatus?: ActionStatus
+  agent?: string
 }
 
 export interface ChatSession {
@@ -56,6 +57,7 @@ export interface AIAction {
     | 'run_command'
     | 'applescript'
     | 'screenshot'
+    | 'orchestrate_task'
     | 'none'
   payload?: {
     name?: string
@@ -68,12 +70,17 @@ export interface AIAction {
     text?: string
     cmd?: string
     script?: string
+    taskTree?: Array<{ agent: string; task: string }>
   }
 }
 
 export interface AIResponse {
   message: string
   action: AIAction
+  handoff?: {
+    target: string
+    reason: string
+  }
   continue_task?: boolean
 }
 
@@ -140,10 +147,21 @@ export interface Workflow {
   runCount: number
 }
 
+export interface SystemInfo {
+  cpuBrand: String,
+  cpuCount: number,
+  memTotalMb: number,
+  memUsedMb: number,
+  osVersion: String,
+  hostname: String,
+  cwd: String,
+}
+
 export interface AXElement {
   role: string
   title: string
   description: string
+  value: string
   x: number
   y: number
   width: number

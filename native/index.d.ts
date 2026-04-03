@@ -75,6 +75,7 @@ export interface SystemInfo {
   memUsedMb: number
   osVersion: string
   hostname: string
+  cwd: string
 }
 /** Read the current clipboard text content. */
 export declare function clipboardRead(): string
@@ -95,6 +96,7 @@ export interface AxElement {
   role: string
   title: string
   description: string
+  value: string
   x: number
   y: number
   width: number
@@ -102,3 +104,14 @@ export interface AxElement {
 }
 export declare function isAccessibilityTrusted(): boolean
 export declare function listUiElements(pid: number, maxDepth: number): Array<AxElement>
+export interface MousePosition {
+  x: number
+  y: number
+}
+/** Get the current mouse cursor position globally. */
+export declare function getMouseLocation(): MousePosition
+/**
+ * Get the number of seconds since the last user input event (mouse or keyboard).
+ * This is used for presence sensing.
+ */
+export declare function getSystemIdleTime(): number
