@@ -58,3 +58,12 @@ logs/
 .eslintcache
 .vite/
 .cache/
+
+# ── Native (Rust) ─────────────────────────────────────────────────────────────
+native/target/
+native/node_modules/
+native/*.node
+native/.env
+native/dist/
+*.swp
+*.swo

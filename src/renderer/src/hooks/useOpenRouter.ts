@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { AIResponse } from '../types'
 
-const MODEL = 'google/gemini-2.0-flash-001'
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 const SYSTEM_PROMPT = `You are Consciouss, an AI agent built into macOS. You can see the user's screen and control their computer.
@@ -61,16 +60,20 @@ ROBUST BROWSER LOGIC (CRITICAL):
    Wrap both in the standard Brave/Chrome window check:
      tell application "Brave Browser"
        if it is running then
-         activate
-         if (count of windows) > 0 then
-           execute front window's active tab javascript "..."
-         end if
-       end if
-     end tell
-   - Replace "Brave Browser" with "Google Chrome" if that is what is on screen.
+        if it is running then
+          activate
+          if (count of windows) > 0 then
+            execute front window's active tab javascript "..."
+          end if
+        end if
+      end tell
+    - Replace "Brave Browser" with "Google Chrome" if that is what is on screen.
 
-4. GENERIC MEDIA KEY (FINAL FALLBACK): If browser/Music app logic fails, use this to trigger the system-wide Play/Pause:
-   tell application "System Events" to key code 103
+5. ACCESSIBILITY ENGINE (NEW):
+   - You will sometimes receive a list of "Detected UI Elements" for the active application.
+   - Use these coordinates [x, y, w, h] for pinpoint accuracy when using the 'click' action.
+   - The 'click' action (x, y) should target the CENTER of the element's bounding box.
+   - If an element title matches the user's intent (e.g. "Submit", "Login"), ALWAYS prefer its coordinates over raw visual estimation.
 
 AppleScript Music patterns (Robust):
 - To play a specific song/artist:
@@ -85,7 +88,9 @@ AppleScript Music patterns (Robust):
 - Play a song by name: tell application "Music"\n  activate\n  try\n    play (first track of library playlist 1 whose name contains "SONG_NAME")\n  on error\n    open location "https://www.youtube.com/results?search_query=SONG_NAME"\n  end try\nend tell
 
 AppleScript Notes patterns (Robust):
-- Create/Show: tell application "Notes"\n  activate\n  tell account "iCloud"\n    set n to make new note with properties {name:"Title", body:"Body text"}\n    show n\n  end tell\nend tell
+- IMPORTANT: When asked to write a note, YOU MUST GENERATE the actual meaningful content and put it in the "body" property. Do NOT just copy the user's prompt as the name.
+- CRITICAL ESCAPING: AppleScript strings MUST be enclosed in double quotes ("). If you need quotes inside your generated body text, omit them entirely or use single quotes (') for the inner text. Do NOT break the outer double quotes. Never use raw line breaks, keep it as one long single line.
+- Create/Show: tell application "Notes"\n  activate\n  tell account "iCloud"\n    set n to make new note with properties {name:"A Relevant Title", body:"The fully generated content goes here..."}\n    show n\n  end tell\nend tell
 
 TASK CONTINUITY RULES (IMPORTANT):
 1. MULTI-STEP TASKS: If the user asks to "Play a song", "Search for X", or anything that requires navigating first, you MUST set "continue_task": true after the first action (e.g., after opening the URL).
@@ -98,7 +103,8 @@ interface UseOpenRouterReturn {
     text: string,
     screenshot?: string | null,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
-    memoryContext?: string | null
+    memoryContext?: string | null,
+    uiContext?: string | null
   ) => Promise<AIResponse | null>
   isStreaming: boolean
   streamingText: string
@@ -121,7 +127,8 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
       text: string,
       screenshot?: string | null,
       history?: Array<{ role: 'user' | 'assistant'; content: string }>,
-      memoryContext?: string | null
+      memoryContext?: string | null,
+      uiContext?: string | null
     ): Promise<AIResponse | null> => {
       const apiKey = import.meta.env.VITE_OPENROUTER_KEY
       if (!apiKey) {
@@ -136,11 +143,10 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
       setStreamingText('')
       setError(null)
 
-      // Build system prompt with memory context
-      const systemPromptWithMemory =
-        SYSTEM_PROMPT + (memoryContext ? `\n\nPrevious session context:\n${memoryContext}` : '')
-
-      // Build history messages
+      // Build system prompt with memory context and UI context
+      let systemPromptWithContext = SYSTEM_PROMPT 
+      if (memoryContext) systemPromptWithContext += `\n\nPrevious session context:\n${memoryContext}`
+      if (uiContext) systemPromptWithContext += `\n\n${uiContext}`
       const historyMessages = (history || []).map((msg) => ({
         role: msg.role,
         content: [{ type: 'text', text: msg.content }]
@@ -164,10 +170,11 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
             'X-Title': 'ConscioussAI'
           },
           body: JSON.stringify({
-            model: MODEL,
+            model: localStorage.getItem('consciouss_model') || 'google/gemini-2.0-flash-001',
             stream: true,
+            max_tokens: 1024,
             messages: [
-              { role: 'system', content: systemPromptWithMemory },
+              { role: 'system', content: systemPromptWithContext },
               ...historyMessages,
               { role: 'user', content: userContent }
             ]

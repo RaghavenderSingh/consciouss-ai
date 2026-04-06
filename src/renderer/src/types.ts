@@ -98,3 +98,62 @@ export interface CaptureResult {
   }
   dataURL?: string
 }
+
+// ─── Workflow Types ───────────────────────────────────────
+
+export type WorkflowActionType = AIAction['type'] | 'trigger' | 'delay'
+
+export interface WorkflowNodeData {
+  label: string
+  actionType: WorkflowActionType
+  payload: AIAction['payload'] & { delayMs?: number }
+  status: 'idle' | 'running' | 'success' | 'error'
+  error?: string
+  output?: string
+  [key: string]: unknown
+}
+
+export interface SerializedNode {
+  id: string
+  type: string
+  position: { x: number; y: number }
+  data: WorkflowNodeData
+}
+
+export interface SerializedEdge {
+  id: string
+  source: string
+  target: string
+}
+
+export interface Workflow {
+  id: string
+  name: string
+  description: string
+  icon: string
+  nodes: SerializedNode[]
+  edges: SerializedEdge[]
+  viewport: { x: number; y: number; zoom: number }
+  createdAt: string
+  updatedAt: string
+  lastRunAt?: string
+  runCount: number
+}
+
+export interface AXElement {
+  role: string
+  title: string
+  description: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface WorkflowProgress {
+  workflowId: string
+  nodeId: string
+  status: 'running' | 'success' | 'error'
+  error?: string
+  output?: string
+}

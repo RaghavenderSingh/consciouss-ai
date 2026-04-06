@@ -12,12 +12,16 @@ import HomeView from './components/HomeView'
 import SpotlightBar from './components/SpotlightBar'
 import LoginView from './components/LoginView'
 import LoginLogsView from './components/LoginLogsView'
+import TelegramView from './components/TelegramView'
+import WorkflowsView from './components/WorkflowsView'
+import NativeLab from './components/NativeLab'
 
 import { useOpenRouter } from './hooks/useOpenRouter'
 import { useScreenCapture } from './hooks/useScreenCapture'
 import { useVoiceInput } from './hooks/useVoiceInput'
 import { executeAction } from './lib/actions'
 import { ActiveApp } from './components/ContextStrip'
+import { scanActiveApp } from './lib/accessibility'
 
 export default function App(): ReactElement {
   const [appState, setAppState] = useState<AppState>('splash')
@@ -30,7 +34,7 @@ export default function App(): ReactElement {
   const [activeApp, setActiveApp] = useState<ActiveApp | null>(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [voiceTranscript, setVoiceTranscript] = useState('')
-  const [activeTab, setActiveTab] = useState<'chats' | 'workflows' | 'logs' | 'telegram'>('chats')
+  const [activeTab, setActiveTab] = useState<'chats' | 'workflows' | 'logs' | 'telegram' | 'lab'>('chats')
 
   // ── Auth state ───────────────────────────────────────────────────────────────
   const [user, setUser] = useState<User | null>(() => {
@@ -201,7 +205,7 @@ export default function App(): ReactElement {
   }, [handleNewChat])
 
   const handleSubmit = useCallback(
-    async (text: string) => {
+    async (text: string, source: 'ui' | 'telegram' = 'ui') => {
       setVoiceTranscript('')
 
       const timestamp = new Date()
@@ -274,11 +278,14 @@ export default function App(): ReactElement {
           console.error('[App] Initial screenshot failure, continuing without vision:', captureErr)
         }
 
+        const uiTree = await scanActiveApp()
+
         const aiResponse = await sendMessage(
           text,
           stitched,
           messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-          sessionMemory
+          sessionMemory,
+          uiTree
         )
 
         stopChips()
@@ -375,7 +382,9 @@ export default function App(): ReactElement {
             await new Promise((r) => setTimeout(r, 2000))
 
             let freshScreenshot: string | null = null
+            let freshUITree: string | null = null
             try {
+              freshUITree = await scanActiveApp()
               const loopRes = (await window.electronAPI?.captureScreen()) as CaptureResult
               if (loopRes && loopRes.screens && loopRes.totalBounds) {
                 const lCanvas = document.createElement('canvas')
@@ -417,7 +426,8 @@ export default function App(): ReactElement {
               `Task: "${text}". ${sysContext}. RESPONSE MUST BE JSON. IF JS FAILS: Use physical 'click' (e.g. at 600, 400).`,
               freshScreenshot,
               loopHistory,
-              sessionMemory
+              sessionMemory,
+              freshUITree
             )
             if (!next) break
 
@@ -464,7 +474,9 @@ export default function App(): ReactElement {
         } else {
           setAppState('chat')
         }
-        window.electronAPI?.sendTelegramReply?.(aiResponse.message)
+        if (source === 'telegram') {
+          window.electronAPI?.sendTelegramReply?.(aiResponse.message)
+        }
       } catch (err) {
         console.error('[App] handleSubmit catastrophic failure:', err)
         setAppState('chat')
@@ -524,7 +536,7 @@ export default function App(): ReactElement {
   useEffect(() => {
     if (!window.electronAPI) return
     window.electronAPI.onTelegramMessage((text): void => {
-      latestSubmitRef.current(text)
+      latestSubmitRef.current(text, 'telegram')
     })
     window.electronAPI.onTelegramStop((): void => handleStop())
     window.electronAPI.onWakeShortcut((): void => handleWakeWord())
@@ -563,8 +575,10 @@ export default function App(): ReactElement {
   }, [])
 
   useEffect(() => {
-    startCapture()
-  }, [startCapture])
+    if (appState !== 'splash' && (user || hasSkippedLogin)) {
+      startCapture()
+    }
+  }, [startCapture, appState, user, hasSkippedLogin])
 
   useEffect(() => {
     const handler = (): void => setWindowWidth(window.innerWidth)
@@ -705,7 +719,6 @@ export default function App(): ReactElement {
                 <div
                   style={{ display: 'flex', alignItems: 'center', gap: 16, pointerEvents: 'auto' }}
                 >
-
                 </div>
               </div>
 
@@ -723,9 +736,10 @@ export default function App(): ReactElement {
                   {inChat ? (
                     <motion.div
                       key="chat"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       style={{
                         height: '100%',
                         width: '100%',
@@ -742,12 +756,46 @@ export default function App(): ReactElement {
                         isCompact={isCompanion}
                       />
                     </motion.div>
+                  ) : activeTab === 'telegram' ? (
+                    <motion.div
+                      key="telegram"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
+                    >
+                      <TelegramView />
+                    </motion.div>
+                  ) : activeTab === 'workflows' ? (
+                    <motion.div
+                      key="workflows"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
+                    >
+                      <WorkflowsView />
+                    </motion.div>
+                  ) : activeTab === 'lab' ? (
+                    <motion.div
+                      key="lab"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
+                    >
+                      {/* <NativeLab /> */}
+                    </motion.div>
                   ) : activeTab === 'logs' ? (
                     <motion.div
                       key="logs"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
                     >
                       <LoginLogsView logs={loginLogs} />
@@ -758,6 +806,7 @@ export default function App(): ReactElement {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                       style={{
                         height: '100%',
                         width: '100%',

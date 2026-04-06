@@ -3,13 +3,13 @@ import {
   shell,
   BrowserWindow,
   ipcMain,
-  desktopCapturer,
   screen,
   globalShortcut,
   systemPreferences,
   Menu,
   MenuItemConstructorOptions,
-  net
+  net,
+  desktopCapturer
 } from 'electron'
 import { join } from 'path'
 import { exec } from 'child_process'
@@ -25,16 +25,58 @@ import { createServer } from 'http'
 import { createHash, randomBytes } from 'crypto'
 import { parse as parseUrl } from 'url'
 
+const native = require(join(__dirname, '../../native/index.js'))
+
 
 let mainWindow: BrowserWindow | null = null
 let telegramBot: TelegramBot | null = null
+let telegramDiscoveryMode = false
+
+const MEMORY_PATH = join(app.getPath('userData'), 'memory.json')
+const CHATS_PATH = join(app.getPath('userData'), 'chats.json')
+const TELEGRAM_CONFIG_PATH = join(app.getPath('userData'), 'telegram_config.json')
+const WORKFLOWS_PATH = join(app.getPath('userData'), 'workflows.json')
 
 import type { ChatSession } from './types'
 
+interface TelegramConfig {
+  token: string
+  chatId: string
+  enabled: boolean
+}
+
+function getTelegramConfig(): TelegramConfig {
+  try {
+    if (existsSync(TELEGRAM_CONFIG_PATH)) {
+      return JSON.parse(readFileSync(TELEGRAM_CONFIG_PATH, 'utf-8'))
+    }
+  } catch (err) {
+    console.error('[Telegram] Failed to read config:', err)
+  }
+  return {
+    token: process.env.TELEGRAM_BOT_TOKEN || '',
+    chatId: process.env.TELEGRAM_CHAT_ID || '',
+    enabled: !!process.env.TELEGRAM_BOT_TOKEN
+  }
+}
+
 // ─── Telegram bot init ────────────────────────────────────────────────────────
 function initTelegram(): void {
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  const allowedChatId = process.env.TELEGRAM_CHAT_ID
+  // Stop existing bot if running
+  if (telegramBot) {
+    telegramBot.stopPolling()
+    telegramBot = null
+    // Clear existing IPC listeners to avoid duplicates
+    ipcMain.removeAllListeners('telegram-reply')
+    ipcMain.removeAllListeners('telegram-screenshot-reply')
+  }
+
+  const { token, chatId: allowedChatId, enabled } = getTelegramConfig()
+
+  if (!enabled || !token || token.startsWith('your_') || token.trim() === '') {
+    console.log('[Telegram] Bot disabled or no valid token')
+    return
+  }
 
   if (!token || token.startsWith('your_')) {
     console.log('[Telegram] No valid TELEGRAM_BOT_TOKEN set, skipping bot init')
@@ -53,6 +95,22 @@ function initTelegram(): void {
 
     telegramBot.on('message', (msg) => {
       const chatId = String(msg.chat.id)
+      
+      // Discovery Mode: auto-capture chatId
+      if (telegramDiscoveryMode) {
+        console.log(`[Telegram] Discovery: Captured Chat ID ${chatId}`)
+        telegramDiscoveryMode = false
+        
+        const config = getTelegramConfig()
+        const newConfig = { ...config, chatId, enabled: true }
+        writeFileSync(TELEGRAM_CONFIG_PATH, JSON.stringify(newConfig, null, 2))
+        
+        mainWindow?.webContents.send('telegram-discovered', { chatId, username: msg.from?.username || 'User' })
+        
+        // Welcome message
+        telegramBot?.sendMessage(chatId, `✅ Successfully linked to Consciouss AI! You can now control your desktop remotely from here.`).catch(console.error)
+        return
+      }
 
       // Security: only respond to allowed chat
       if (allowedChatId && chatId !== allowedChatId) {
@@ -79,16 +137,18 @@ function initTelegram(): void {
 
     // Listen for replies from renderer to send back to Telegram
     ipcMain.on('telegram-reply', (_, text: string) => {
-      if (!allowedChatId) return
-      telegramBot?.sendMessage(allowedChatId, text).catch(console.error)
+      const config = getTelegramConfig()
+      if (!config.chatId) return
+      telegramBot?.sendMessage(config.chatId, text).catch(console.error)
     })
 
     // Listen for screenshot to send to Telegram
     ipcMain.on('telegram-screenshot-reply', (_, base64: string) => {
-      if (!allowedChatId) return
+      const config = getTelegramConfig()
+      if (!config.chatId) return
       const buffer = Buffer.from(base64.replace(/^data:image\/\w+;base64,/, ''), 'base64')
       telegramBot
-        ?.sendPhoto(allowedChatId, buffer, { caption: 'Current screen' })
+        ?.sendPhoto(config.chatId, buffer, { caption: 'Current screen' })
         .catch(console.error)
     })
 
@@ -104,23 +164,23 @@ function initTelegram(): void {
 ipcMain.handle('capture-screen', async () => {
   try {
     const displays = screen.getAllDisplays()
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: 1280, height: 800 }
+    const screens = displays.map((d, i) => {
+      // Use Rust native capture for each display
+      const buffer = native.captureScreen(i)
+      return {
+        dataURL: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+        id: d.id,
+        bounds: d.bounds
+      }
     })
-    
-    // Map sources to their displays to know their positions
+
     return {
-      screens: sources.map((s, i) => ({
-        dataURL: s.thumbnail.toDataURL(),
-        id: s.display_id,
-        bounds: displays[i]?.bounds || displays[0].bounds
-      })),
+      screens,
       totalBounds: {
-        left: Math.min(...displays.map(d => d.bounds.x)),
-        top: Math.min(...displays.map(d => d.bounds.y)),
-        right: Math.max(...displays.map(d => d.bounds.x + d.bounds.width)),
-        bottom: Math.max(...displays.map(d => d.bounds.y + d.bounds.height))
+        left: Math.min(...displays.map((d) => d.bounds.x)),
+        top: Math.min(...displays.map((d) => d.bounds.y)),
+        right: Math.max(...displays.map((d) => d.bounds.x + d.bounds.width)),
+        bottom: Math.max(...displays.map((d) => d.bounds.y + d.bounds.height))
       }
     }
   } catch (err) {
@@ -132,7 +192,6 @@ ipcMain.handle('capture-screen', async () => {
 // 2. Move mouse
 ipcMain.handle('move-mouse', async (_, { x, y }: { x: number; y: number }) => {
   try {
-    const { mouse, Point } = await import('@nut-tree-fork/nut-js')
     const displays = screen.getAllDisplays()
     const left = Math.min(...displays.map((d) => d.bounds.x))
     const top = Math.min(...displays.map((d) => d.bounds.y))
@@ -143,7 +202,7 @@ ipcMain.handle('move-mouse', async (_, { x, y }: { x: number; y: number }) => {
     const scaledY = top + y * scaleFactor
 
     console.log(`[IPC] move-mouse: AI(${x}, ${y}) -> Total Desktop(${Math.round(scaledX)}, ${Math.round(scaledY)})`)
-    await mouse.move([new Point(scaledX, scaledY)])
+    native.moveMouse(Math.round(scaledX), Math.round(scaledY))
   } catch (err) {
     console.error('[IPC] move-mouse error:', err)
     throw err
@@ -155,24 +214,24 @@ ipcMain.handle(
   'click-mouse',
   async (_, { x, y, button = 'left' }: { x: number; y: number; button?: string }) => {
     try {
-      const { mouse, Point, Button } = await import('@nut-tree-fork/nut-js')
       const displays = screen.getAllDisplays()
       const left = Math.min(...displays.map((d) => d.bounds.x))
       const top = Math.min(...displays.map((d) => d.bounds.y))
       const desktopW = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width)) - left
 
       const scaleFactor = desktopW / 1280
-      const scaledX = left + x * scaleFactor
-      const scaledY = top + y * scaleFactor
+      const scaledX = Math.round(left + x * scaleFactor)
+      const scaledY = Math.round(top + y * scaleFactor)
 
       console.log(
-        `[IPC] click-mouse: AI(${x}, ${y}) -> Total Desktop(${Math.round(scaledX)}, ${Math.round(scaledY)})`
+        `[IPC] click-mouse: AI(${x}, ${y}) -> Total Desktop(${scaledX}, ${scaledY})`
       )
 
-      await mouse.move([new Point(scaledX, scaledY)])
-      const btn =
-        button === 'right' ? Button.RIGHT : button === 'middle' ? Button.MIDDLE : Button.LEFT
-      await mouse.click(btn)
+      if (button === 'right') {
+        native.rightClick(scaledX, scaledY)
+      } else {
+        native.click(scaledX, scaledY)
+      }
     } catch (err) {
       console.error('[IPC] click-mouse error:', err)
       throw err
@@ -183,8 +242,7 @@ ipcMain.handle(
 // 4. Type text
 ipcMain.handle('type-text', async (_, { text }: { text: string }) => {
   try {
-    const { keyboard } = await import('@nut-tree-fork/nut-js')
-    await keyboard.type(text)
+    native.typeText(text)
   } catch (err) {
     console.error('[IPC] type-text error:', err)
     throw err
@@ -194,12 +252,7 @@ ipcMain.handle('type-text', async (_, { text }: { text: string }) => {
 // 5. Key combo
 ipcMain.handle('key-combo', async (_, { keys }: { keys: string[] }) => {
   try {
-    const { keyboard, Key } = await import('@nut-tree-fork/nut-js')
-    const mapped = keys.map((k) => {
-      const upper = k.toUpperCase()
-      return (Key as Record<string, unknown>)[upper] ?? k
-    })
-    await keyboard.pressKey(...(mapped as Parameters<typeof keyboard.pressKey>))
+    native.keyCombo(keys)
   } catch (err) {
     console.error('[IPC] key-combo error:', err)
     throw err
@@ -208,15 +261,15 @@ ipcMain.handle('key-combo', async (_, { keys }: { keys: string[] }) => {
 
 // 6. Run shell command
 ipcMain.handle('run-command', (_, { cmd }: { cmd: string }) => {
-  return new Promise<string>((resolve, reject) => {
-    exec(cmd, { timeout: 15000 }, (error, stdout, stderr) => {
-      if (error) {
-        reject(stderr || error.message)
-        return
-      }
-      resolve(stdout)
-    })
-  })
+  try {
+    const result = native.execCommand(cmd, 15000)
+    if (result.code !== 0 && result.stderr) {
+      throw new Error(result.stderr)
+    }
+    return result.stdout
+  } catch (err) {
+    throw err
+  }
 })
 
 // 7. Open app
@@ -243,17 +296,16 @@ ipcMain.handle('open-app', (_, { name }: { name: string }) => {
 
   const tryOpen = (appName: string): Promise<void> =>
     new Promise((res, rej) => {
-      // Use AppleScript so the app activates and comes to front
-      const script = `tell application "${appName}" to activate`
-      exec(`osascript -e '${script}'`, (err) => {
-        if (err) {
-          // Fall back to open -a if AppleScript fails (app not running yet)
-          exec(`open -a "${appName}"`, (err2) => {
-            if (err2) rej(err2.message)
-            else res()
-          })
-        } else res()
-      })
+      try {
+        native.activateApp(appName)
+        res()
+      } catch (err) {
+        // Fall back to open -a if native activation fails
+        exec(`open -a "${appName}"`, (err2) => {
+          if (err2) rej(err2.message)
+          else res()
+        })
+      }
     })
 
   // Try resolved name first, then the original if different
@@ -342,6 +394,66 @@ ipcMain.handle('applescript', (_, { script }: { script: string }) => {
       child.stdin.end()
     }
   })
+})
+// ── Native-powered capabilities (Rust) ─────────────────────────────────────────
+
+// 10. List all open windows
+ipcMain.handle('list-windows', () => {
+  return native.listWindows()
+})
+
+ipcMain.handle('is-accessibility-trusted', () => {
+  return native.isAccessibilityTrusted()
+})
+
+ipcMain.handle('get-frontmost-app-pid', () => {
+  return native.getFrontmostAppPid()
+})
+
+ipcMain.handle('list-ui-elements', (_, pid: number, depth: number = 7) => {
+  try {
+    return native.listUiElements(pid, depth)
+  } catch (err) {
+    console.error('Failed to list UI elements:', err)
+    return []
+  }
+})
+
+ipcMain.handle('get-frontmost-app', () => {
+  return native.getFrontmostApp()
+})
+
+// 12. Clipboard read/write
+ipcMain.handle('clipboard-read', () => {
+  return native.clipboardRead()
+})
+
+ipcMain.handle('clipboard-write', (_, { text }: { text: string }) => {
+  native.clipboardWrite(text)
+})
+
+// 13. Native macOS notification
+ipcMain.handle('native-notify', (_, { title, body }: { title: string; body: string }) => {
+  native.notify(title, body)
+})
+
+// 14. System info
+ipcMain.handle('system-info', () => {
+  return native.getSystemInfo()
+})
+
+// 15. Native screen capture (via CoreGraphics — faster, more reliable)
+ipcMain.handle('native-capture-screen', (_, { displayIndex }: { displayIndex?: number } = {}) => {
+  const buffer = native.captureScreen(displayIndex ?? 0)
+  return buffer.toString('base64')
+})
+
+// 16. Native display info
+ipcMain.handle('display-info', () => {
+  return {
+    count: native.getDisplayCount(),
+    displays: native.getDisplayBounds()
+  }
 })
 
 // ── Audio transcription via Groq Whisper ──────────────────────────────────────
@@ -522,10 +634,36 @@ ipcMain.handle('set-window-size', (_, mode: 'expanded' | 'companion' | 'pill' | 
   mainWindow.setBounds(sizes[mode], true) // true = native macOS spring animation
 })
 
-// ── Session memory ────────────────────────────────────────────────────────────
-const MEMORY_PATH = join(app.getPath('userData'), 'memory.json')
-const CHATS_PATH = join(app.getPath('userData'), 'chats.json')
+// ─── Telegram IPC ─────────────────────────────────────────────────────────────
+ipcMain.handle('get-telegram-config', () => getTelegramConfig())
 
+ipcMain.handle('update-telegram-config', (_, newConfig: TelegramConfig) => {
+  try {
+    writeFileSync(TELEGRAM_CONFIG_PATH, JSON.stringify(newConfig, null, 2))
+    initTelegram()
+    return { success: true }
+  } catch (err) {
+    console.error('[Telegram] Failed to save config:', err)
+    return { success: false, error: String(err) }
+  }
+})
+
+ipcMain.handle('get-telegram-status', () => {
+  return {
+    isActive: !!telegramBot && telegramBot.isPolling(),
+    botName: telegramBot ? 'Consciouss Bot' : null,
+    isDiscoveryActive: telegramDiscoveryMode
+  }
+})
+
+ipcMain.handle('start-telegram-discovery', () => {
+  if (!telegramBot) return { success: false, error: 'Bot not initialized. Please provide a token first.' }
+  telegramDiscoveryMode = true
+  console.log('[Telegram] Discovery mode activated')
+  return { success: true }
+})
+
+// ── Session memory ────────────────────────────────────────────────────────────
 ipcMain.handle('read-memory', () => {
   try {
     if (!existsSync(MEMORY_PATH)) return null
@@ -566,6 +704,243 @@ ipcMain.handle('write-chats', (_, sessions: ChatSession[]) => {
   }
 })
 
+// ─── Workflow Automation ──────────────────────────────────────────────────────
+
+let workflowAbortController: AbortController | null = null
+
+function readWorkflows(): any[] {
+  try {
+    if (!existsSync(WORKFLOWS_PATH)) return []
+    return JSON.parse(readFileSync(WORKFLOWS_PATH, 'utf-8'))
+  } catch {
+    return []
+  }
+}
+
+function writeWorkflows(workflows: any[]): void {
+  writeFileSync(WORKFLOWS_PATH, JSON.stringify(workflows, null, 2))
+}
+
+ipcMain.handle('workflow:list', () => {
+  return readWorkflows()
+})
+
+ipcMain.handle('workflow:save', (_, workflow: any) => {
+  const workflows = readWorkflows()
+  const idx = workflows.findIndex((w: any) => w.id === workflow.id)
+  if (idx >= 0) {
+    workflows[idx] = workflow
+  } else {
+    workflows.push(workflow)
+  }
+  writeWorkflows(workflows)
+})
+
+ipcMain.handle('workflow:delete', (_, id: string) => {
+  const workflows = readWorkflows().filter((w: any) => w.id !== id)
+  writeWorkflows(workflows)
+})
+
+ipcMain.handle('workflow:run', async (_, id: string) => {
+  const workflows = readWorkflows()
+  const wf = workflows.find((w: any) => w.id === id)
+  if (!wf) throw new Error(`Workflow ${id} not found`)
+
+  workflowAbortController = new AbortController()
+  const signal = workflowAbortController.signal
+
+  // Build adjacency list from edges
+  const adj: Record<string, string[]> = {}
+  const inDegree: Record<string, number> = {}
+  for (const node of wf.nodes) {
+    adj[node.id] = []
+    inDegree[node.id] = 0
+  }
+  for (const edge of wf.edges) {
+    adj[edge.source] = adj[edge.source] || []
+    adj[edge.source].push(edge.target)
+    inDegree[edge.target] = (inDegree[edge.target] || 0) + 1
+  }
+
+  // Topological sort (Kahn's algorithm)
+  const queue: string[] = []
+  for (const nodeId of Object.keys(inDegree)) {
+    if (inDegree[nodeId] === 0) queue.push(nodeId)
+  }
+  const sorted: string[] = []
+  while (queue.length > 0) {
+    const curr = queue.shift()!
+    sorted.push(curr)
+    for (const next of (adj[curr] || [])) {
+      inDegree[next]--
+      if (inDegree[next] === 0) queue.push(next)
+    }
+  }
+
+  // Execute each node in order
+  const nodeMap: Record<string, any> = {}
+  for (const n of wf.nodes) nodeMap[n.id] = n
+
+  for (const nodeId of sorted) {
+    if (signal.aborted) break
+
+    const node = nodeMap[nodeId]
+    if (!node) continue
+
+    const data = node.data
+    mainWindow?.webContents.send('workflow:progress', {
+      workflowId: id,
+      nodeId,
+      status: 'running',
+    })
+
+    try {
+      let nodeOutput = ''
+
+      // Execute based on action type
+      switch (data.actionType) {
+        case 'trigger':
+          nodeOutput = 'Workflow started'
+          break
+
+        case 'click': {
+          const { x, y } = data.payload || {}
+          if (x != null && y != null) {
+            native.click(x, y)
+            nodeOutput = `Clicked at (${x}, ${y})`
+          } else {
+            nodeOutput = 'Skipped — no coordinates set'
+          }
+          break
+        }
+
+        case 'type_text': {
+          const { text } = data.payload || {}
+          if (text) {
+            native.typeText(text)
+            nodeOutput = `Typed: "${text}"`
+          } else {
+            nodeOutput = 'Skipped — no text set'
+          }
+          break
+        }
+
+        case 'open_app': {
+          const name = data.payload?.name || data.payload?.app_name
+          if (name) {
+            native.activateApp(name)
+            nodeOutput = `Opened ${name}`
+          } else {
+            nodeOutput = 'Skipped — no app name set'
+          }
+          break
+        }
+
+        case 'open_url': {
+          const { url, browser } = data.payload || {}
+          if (url) {
+            if (browser) {
+              native.execCommand(`open -a "${browser}" "${url}"`, 10000)
+            } else {
+              await shell.openExternal(url)
+            }
+            nodeOutput = `Opened ${url}`
+          } else {
+            nodeOutput = 'Skipped — no URL set'
+          }
+          break
+        }
+
+        case 'run_command': {
+          const cmd = data.payload?.cmd
+          if (cmd) {
+            const result = native.execCommand(cmd, 15000)
+            if (result.code !== 0 && result.stderr) {
+              throw new Error(`Exit ${result.code}: ${result.stderr}`)
+            }
+            nodeOutput = result.stdout || result.stderr || '(no output)'
+          } else {
+            nodeOutput = 'Skipped — no command set'
+          }
+          break
+        }
+
+        case 'applescript': {
+          const script = data.payload?.script
+          if (script) {
+            const escaped = script.replace(/'/g, "'\"'\"'")
+            const result = native.execCommand(`osascript -e '${escaped}'`, 15000)
+            if (result.code !== 0 && result.stderr) {
+              throw new Error(`AppleScript error: ${result.stderr}`)
+            }
+            nodeOutput = result.stdout || '(no output)'
+          } else {
+            nodeOutput = 'Skipped — no script set'
+          }
+          break
+        }
+
+        case 'screenshot': {
+          nodeOutput = 'Screenshot captured'
+          break
+        }
+
+        case 'delay': {
+          const ms = data.payload?.delayMs || 1000
+          await new Promise((r) => setTimeout(r, ms))
+          nodeOutput = `Waited ${ms}ms`
+          break
+        }
+
+        default:
+          nodeOutput = 'Unknown action'
+          break
+      }
+
+      if (!signal.aborted) {
+        mainWindow?.webContents.send('workflow:progress', {
+          workflowId: id,
+          nodeId,
+          status: 'success',
+          output: nodeOutput,
+        })
+      }
+
+      // Post-step delay (unless it's already a delay node)
+      if (data.actionType !== 'delay' && data.actionType !== 'trigger') {
+        const afterDelay = data.payload?.delayMs || 800
+        await new Promise((r) => setTimeout(r, afterDelay))
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      mainWindow?.webContents.send('workflow:progress', {
+        workflowId: id,
+        nodeId,
+        status: 'error',
+        error: errMsg,
+        output: `Error: ${errMsg}`,
+      })
+      break // Stop on error
+    }
+  }
+
+  // Update run count
+  const updatedWorkflows = readWorkflows()
+  const wfIdx = updatedWorkflows.findIndex((w: any) => w.id === id)
+  if (wfIdx >= 0) {
+    updatedWorkflows[wfIdx].runCount = (updatedWorkflows[wfIdx].runCount || 0) + 1
+    updatedWorkflows[wfIdx].lastRunAt = new Date().toISOString()
+    writeWorkflows(updatedWorkflows)
+  }
+
+  workflowAbortController = null
+})
+
+ipcMain.handle('workflow:stop', () => {
+  workflowAbortController?.abort()
+  workflowAbortController = null
+})
+
 // ─── Create window ────────────────────────────────────────────────────────────
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -573,6 +948,7 @@ function createWindow(): void {
     height: 900,
     show: false,
     frame: false,
+    titleBarStyle: 'hiddenInset',
     transparent: true,
     vibrancy: 'fullscreen-ui',
     visualEffectState: 'active',
@@ -695,13 +1071,23 @@ app.whenReady().then(async () => {
     const micStatus = systemPreferences.getMediaAccessStatus('microphone')
     if (micStatus !== 'granted') await systemPreferences.askForMediaAccess('microphone')
 
+    const isTrusted = systemPreferences.isTrustedAccessibilityClient(true)
+    if (!isTrusted) {
+      console.warn('[Permissions] Accessibility not granted — asking user')
+    }
+
     const screenStatus = systemPreferences.getMediaAccessStatus('screen')
     if (screenStatus !== 'granted') {
       console.warn(
         '[Permissions] Screen recording not granted — go to System Preferences > Privacy & Security > Screen Recording and enable Electron'
       )
+      // Trigger prompt
+      desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } })
+        .then(() => {})
+        .catch(() => {})
     }
   }
+
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

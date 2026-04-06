@@ -25,6 +25,7 @@ export default function CommandBar({
   onNewChat
 }: Props): React.ReactElement {
   const [value, setValue] = useState('')
+  const [model, setModel] = useState(() => localStorage.getItem('consciouss_model') || 'google/gemini-2.0-flash-001')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -66,9 +67,9 @@ export default function CommandBar({
           onClick={onMicClick}
           style={{
             flexShrink: 0,
-            width: 52,
-            height: 52,
-            borderRadius: 14,
+            width: 64,
+            height: 64,
+            borderRadius: 16,
             background: isListening ? 'transparent' : 'linear-gradient(135deg, #FF54B0 0%, #FF4B33 100%)',
             display: 'flex',
             alignItems: 'center',
@@ -80,9 +81,7 @@ export default function CommandBar({
           }}
         >
           {isListening || isWorking ? (
-            <div style={{ transform: 'scale(1.2)' }}>
-              <OrbShader isListening={isListening} isWorking={isWorking} size={64} />
-            </div>
+            <OrbShader isListening={isListening} isWorking={isWorking} size={64} />
           ) : (
             <LogoIcon size={32} />
           )}
@@ -140,6 +139,34 @@ export default function CommandBar({
             marginRight: 8
           }}
         >
+          {/* Model Selector */}
+          <select
+            value={model}
+            onChange={(e) => {
+              setModel(e.target.value)
+              localStorage.setItem('consciouss_model', e.target.value)
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'rgba(255,255,255,0.4)',
+              cursor: 'pointer',
+              fontSize: 12,
+              padding: '6px 4px',
+              fontFamily: 'inherit',
+              appearance: 'none',
+              WebkitAppearance: 'none'
+            }}
+          >
+            <option value="google/gemini-2.0-flash-001">Gemini Flash</option>
+            <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini Pro</option>
+            <option value="anthropic/claude-3.5-sonnet">Claude Sonnet</option>
+            <option value="openai/gpt-4o">GPT-4o</option>
+          </select>
+
+          <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.06)' }} />
+
           <button
             onClick={onNewChat}
             style={{
@@ -161,7 +188,7 @@ export default function CommandBar({
             style={{
               background: 'transparent',
               border: 'none',
-              color: isListening ? '#ef4444' : 'rgba(255,255,255,0.3)',
+              color: isListening ? '#FF4B33' : 'rgba(255,255,255,0.3)',
               padding: 6,
               cursor: 'pointer',
               display: 'flex'

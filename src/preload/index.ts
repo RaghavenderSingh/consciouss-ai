@@ -52,6 +52,15 @@ const electronAPI = {
     ipcRenderer.send('telegram-screenshot-reply', base64)
   },
 
+  getTelegramConfig: (): Promise<any> => ipcRenderer.invoke('get-telegram-config'),
+  updateTelegramConfig: (config: any): Promise<any> => ipcRenderer.invoke('update-telegram-config', config),
+  getTelegramStatus: (): Promise<any> => ipcRenderer.invoke('get-telegram-status'),
+  startTelegramDiscovery: (): Promise<any> => ipcRenderer.invoke('start-telegram-discovery'),
+  onTelegramDiscovered: (callback: (data: any) => void): void => {
+    ipcRenderer.removeAllListeners('telegram-discovered')
+    ipcRenderer.on('telegram-discovered', (_, data) => callback(data))
+  },
+
   // Chats
   readChats: (): Promise<ChatSession[]> => ipcRenderer.invoke('read-chats'),
   writeChats: (sessions: ChatSession[]): Promise<void> =>
@@ -79,7 +88,35 @@ const electronAPI = {
   onWakeShortcut: (callback: () => void): void => {
     ipcRenderer.removeAllListeners('wake-shortcut')
     ipcRenderer.on('wake-shortcut', () => callback())
-  }
+  },
+
+  // ─── Workflow Automation ─────────────────────────────────
+  listWorkflows: (): Promise<any[]> => ipcRenderer.invoke('workflow:list'),
+  saveWorkflow: (workflow: any): Promise<void> => ipcRenderer.invoke('workflow:save', workflow),
+  deleteWorkflow: (id: string): Promise<void> => ipcRenderer.invoke('workflow:delete', id),
+  runWorkflow: (id: string): Promise<void> => ipcRenderer.invoke('workflow:run', id),
+  stopWorkflow: (): Promise<void> => ipcRenderer.invoke('workflow:stop'),
+  onWorkflowProgress: (callback: (data: any) => void): (() => void) => {
+    const handler = (_: any, data: any) => callback(data)
+    ipcRenderer.on('workflow:progress', handler)
+    return () => { ipcRenderer.removeListener('workflow:progress', handler) }
+  },
+
+  // ─── Native Rust-Powered APIs ───────────────────────────
+  listWindows: (): Promise<any[]> => ipcRenderer.invoke('list-windows'),
+  getFrontmostApp: (): Promise<string> => ipcRenderer.invoke('get-frontmost-app'),
+  isAccessibilityTrusted: (): Promise<boolean> => ipcRenderer.invoke('is-accessibility-trusted'),
+  getFrontmostAppPid: (): Promise<number> => ipcRenderer.invoke('get-frontmost-app-pid'),
+  listUIElements: (pid: number, depth?: number): Promise<any[]> =>
+    ipcRenderer.invoke('list-ui-elements', pid, depth),
+  clipboardRead: (): Promise<string> => ipcRenderer.invoke('clipboard-read'),
+  clipboardWrite: (text: string): Promise<void> => ipcRenderer.invoke('clipboard-write', { text }),
+  nativeNotify: (title: string, body: string): Promise<void> =>
+    ipcRenderer.invoke('native-notify', { title, body }),
+  systemInfo: (): Promise<any> => ipcRenderer.invoke('system-info'),
+  nativeCaptureScreen: (displayIndex?: number): Promise<string> =>
+    ipcRenderer.invoke('native-capture-screen', { displayIndex }),
+  displayInfo: (): Promise<any> => ipcRenderer.invoke('display-info')
 }
 
 if (process.contextIsolated) {

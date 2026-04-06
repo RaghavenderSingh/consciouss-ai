@@ -35,6 +35,11 @@ export interface ElectronBridge {
   onTelegramScreenshotRequest(callback: () => void): void
   sendTelegramReply(text: string): void
   sendTelegramScreenshot(base64: string): void
+  getTelegramConfig(): Promise<any>
+  updateTelegramConfig(config: any): Promise<any>
+  getTelegramStatus(): Promise<any>
+  startTelegramDiscovery(): Promise<any>
+  onTelegramDiscovered(callback: (data: any) => void): void
   readChats(): Promise<any[]>
   writeChats(sessions: any[]): Promise<void>
   setWindowSize(mode: 'expanded' | 'companion' | 'pill' | 'spotlight'): Promise<void>
@@ -43,6 +48,54 @@ export interface ElectronBridge {
   onWakeShortcut(callback: () => void): void
   transcribeAudio(buffer: Uint8Array, mimeType: string): Promise<string>
   googleAuth(): Promise<{ id: string; name: string; email: string; avatarUrl: string; subscription: string }>
+
+  // Workflow Automation
+  listWorkflows(): Promise<any[]>
+  saveWorkflow(workflow: any): Promise<void>
+  deleteWorkflow(id: string): Promise<void>
+  runWorkflow(id: string): Promise<void>
+  stopWorkflow(): Promise<void>
+  onWorkflowProgress(callback: (data: any) => void): () => void
+
+  // Native Rust-Powered APIs
+  listWindows(): Promise<Array<{
+    pid: number
+    appName: string
+    title: string
+    x: number
+    y: number
+    width: number
+    height: number
+    layer: number
+    isOnScreen: boolean
+  }>>
+  getFrontmostApp(): Promise<string>
+  isAccessibilityTrusted(): Promise<boolean>
+  getFrontmostAppPid(): Promise<number>
+  listUIElements(pid: number, depth?: number): Promise<any[]>
+  clipboardRead(): Promise<string>
+  clipboardWrite(text: string): Promise<void>
+  nativeNotify(title: string, body: string): Promise<void>
+  systemInfo(): Promise<{
+    cpuBrand: string
+    cpuCount: number
+    memTotalMb: number
+    memUsedMb: number
+    osVersion: string
+    hostname: string
+  }>
+  nativeCaptureScreen(displayIndex?: number): Promise<string>
+  displayInfo(): Promise<{
+    count: number
+    displays: Array<{
+      id: number
+      x: number
+      y: number
+      width: number
+      height: number
+      isMain: boolean
+    }>
+  }>
 }
 
 declare global {
