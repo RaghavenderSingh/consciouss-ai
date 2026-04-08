@@ -71,11 +71,21 @@ export interface AIAction {
     text?: string
     cmd?: string
     script?: string
-    taskTree?: Array<{ agent: string; task: string }>
+    taskTree?: Array<{ id: string; agent: string; task: string; status?: 'pending' | 'running' | 'done' | 'failed'; retries?: number; result?: string }>
   }
 }
 
+export interface HTNNode {
+  id: string
+  agent: string
+  task: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  retries: number
+  result?: string
+}
+
 export interface AIResponse {
+  thought?: string
   message: string
   action: AIAction
   handoff?: {
@@ -83,6 +93,7 @@ export interface AIResponse {
     reason: string
   }
   continue_task?: boolean
+  replan?: boolean
 }
 
 export interface ScreenInfo {

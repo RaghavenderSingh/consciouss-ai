@@ -15,7 +15,6 @@ import { useScreenCapture } from './hooks/useScreenCapture'
 import { useVoiceInput } from './hooks/useVoiceInput'
 import { useAttention } from './hooks/useAttention'
 import { SovereignOrchestrator } from './lib/orchestrator'
-import { AGENT_ROLES } from './lib/prompts'
 
 export default function App(): ReactElement {
   const [appState, setAppState] = useState<AppState>('splash')
@@ -147,12 +146,18 @@ export default function App(): ReactElement {
         [...messages, newUserMsg],
         sendMessage,
         (state, aiResponse) => {
-          setAppState(state.activeAgent === AGENT_ROLES.SUPERVISOR ? 'working' : 'executing')
+          // Map planPhase to UI appState
+          if (state.planPhase === 'planning') setAppState('working')
+          else if (state.planPhase === 'executing') setAppState('executing')
+          else if (state.planPhase === 'recovering') setAppState('working')
+
           if (aiResponse) {
+            // Prepend inner thought to message if present (adds transparency)
+            const thoughtPrefix = aiResponse.thought ? `💭 *${aiResponse.thought}*\n\n` : ''
             const agentMsg: Message = {
               id: `msg-${Date.now()}-${state.activeAgent}`,
               role: 'assistant',
-              content: aiResponse.message,
+              content: `${thoughtPrefix}${aiResponse.message}`,
               timestamp: new Date(),
               action: aiResponse.action,
               agent: state.activeAgent,
