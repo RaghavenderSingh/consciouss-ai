@@ -14,6 +14,7 @@ Action types and their payloads:
 - 'run_command': { "cmd": "shell command" }
 - 'applescript': { "script": "AppleScript code" }
 - 'screenshot': {} (Manual refresh)
+- 'scrape_url': { "url": "https://..." } (Extracts raw markdown from any webpage for deep research)
 - 'none': {} (Task complete)
 
 ROBUST BROWSER LOGIC (CRITICAL):

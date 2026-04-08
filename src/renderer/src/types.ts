@@ -58,6 +58,7 @@ export interface AIAction {
     | 'applescript'
     | 'screenshot'
     | 'orchestrate_task'
+    | 'scrape_url'
     | 'none'
   payload?: {
     name?: string

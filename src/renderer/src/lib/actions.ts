@@ -83,6 +83,38 @@ export async function executeAction(
         // Orchestrator handles this natively, silent no-op here
         break
 
+      case 'scrape_url': {
+        if (!p.url) {
+          console.warn('[actions] scrape_url missing url')
+          break
+        }
+        console.log(`[actions] Scraping URL with FireCrawl: ${p.url}`)
+        const apiKey = import.meta.env.VITE_FIRECRAWL_KEY
+        if (!apiKey) {
+          throw new Error('VITE_FIRECRAWL_KEY is not set in your .env file.')
+        }
+
+        const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({ url: p.url, formats: ['markdown'] })
+        })
+
+        if (!res.ok) {
+          const errText = await res.text()
+          throw new Error(`FireCrawl Error ${res.status}: ${errText}`)
+        }
+
+        const data = await res.json()
+        const markdown = data.data?.markdown || 'No content found.'
+        console.log(`[actions] Scrape finished. Markdown length: ${markdown.length}`)
+        onStatus?.('done')
+        return `[SCRAPE RESULT FOR ${p.url}]:\n${markdown.substring(0, 8000)}... (truncated for context)`
+      }
+
       case 'none':
         break
 
