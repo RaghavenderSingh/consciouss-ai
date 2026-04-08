@@ -46,7 +46,7 @@ export default function App(): ReactElement {
 
   const { sendMessage, isStreaming, streamingText } = useOpenRouter()
   const { startCapture } = useScreenCapture()
-  const { focusElement } = useAttention()
+  const { focusElement } = useAttention({ active: appState !== 'spotlight' })
 
   const isHud = window.location.hash === '#hud'
 
@@ -222,12 +222,25 @@ export default function App(): ReactElement {
 
   if (isHud) return <SovereignHUD />
 
+  // Spotlight mode: full-screen centered overlay, nothing else rendered
+  if (appState === 'spotlight') {
+    return (
+      <div style={{ width: '100vw', height: '100vh', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <SpotlightBar
+          isVisible
+          isListening={isListening}
+          onSubmit={t => { window.electronAPI?.setWindowSize('expanded'); handleSubmit(t) }}
+          onDismiss={() => { window.electronAPI?.setWindowSize('expanded'); setAppState('chat') }}
+        />
+      </div>
+    )
+  }
+
   const isWorking = appState === 'working' || appState === 'executing'
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: 'transparent', display: 'flex', overflow: 'hidden' }}>
       <SplashScreen onComplete={handleSplashComplete} />
-      <SpotlightBar isVisible={appState === 'spotlight'} isListening={isListening} onSubmit={t => { window.electronAPI?.setWindowSize('expanded'); handleSubmit(t) }} onDismiss={() => setAppState('chat')} />
       
       {!isCompanion && (
         <Sidebar 

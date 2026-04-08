@@ -30,6 +30,7 @@ const native = require(join(__dirname, '../../native/index.js'))
 
 let mainWindow: BrowserWindow | null = null
 let hudWindow: BrowserWindow | null = null
+let clapWindow: BrowserWindow | null = null
 let telegramBot: TelegramBot | null = null
 let telegramDiscoveryMode = false
 
@@ -616,7 +617,7 @@ ipcMain.handle('google-auth', async () => {
 
 // ── Window size control ───────────────────────────────────────────────────────
 ipcMain.handle('set-window-size', (_, mode: 'expanded' | 'companion' | 'pill' | 'spotlight') => {
-  if (!mainWindow) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
 
   const sizes = {
@@ -639,6 +640,7 @@ ipcMain.handle('set-window-size', (_, mode: 'expanded' | 'companion' | 'pill' | 
       height: 72
     },
     spotlight: {
+      x: Math.round((sw - 680) / 2),
       y: Math.round((sh - 160) / 2),
       width: 680,
       height: 160
@@ -982,8 +984,11 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show()
+    const { wasOpenedAtLogin } = app.getLoginItemSettings()
+    if (!wasOpenedAtLogin) mainWindow?.show()
   })
+
+  mainWindow.on('closed', () => { mainWindow = null })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -1026,6 +1031,52 @@ function createHudWindow(): void {
     hudWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'hud' })
   }
 }
+
+function createClapWindow(): void {
+  clapWindow = new BrowserWindow({
+    width: 1,
+    height: 1,
+    show: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/clap.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  clapWindow.webContents.session.setPermissionRequestHandler((_, permission, callback) => {
+    callback(permission === 'media')
+  })
+
+  const htmlPath = app.isPackaged
+    ? join(process.resourcesPath, 'resources', 'clap-detector.html')
+    : join(__dirname, '../../resources/clap-detector.html')
+
+  clapWindow.loadFile(htmlPath)
+
+  clapWindow.on('closed', () => { clapWindow = null })
+}
+
+// IPC: double-clap received from hidden audio window → wake main window
+ipcMain.on('clap-detected', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    // Main window was closed — recreate it
+    createWindow()
+    return
+  }
+  console.log('[Clap] Double clap — waking app')
+  try {
+    mainWindow.show()
+    mainWindow.focus()
+    if (!mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send('wake-shortcut')
+    }
+  } catch (err) {
+    console.error('[Clap] Failed to wake window:', err)
+  }
+})
 
 // ─── Native Menu setup ────────────────────────────────────────────────────────
 function setupMenu(): void {
@@ -1137,8 +1188,12 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // Register as a login item so the app auto-starts on boot (hidden, no visible window)
+  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
+
   createWindow()
   createHudWindow()
+  createClapWindow()
   initTelegram()
   setupMenu()
 

@@ -27,7 +27,7 @@ export default function TelegramView(): React.ReactElement {
   const [setupMode, setSetupMode] = useState<'manual' | 'auto'>('auto')
 
   useEffect(() => {
-    console.log('[TelegramView] Checking for API...', !!window.electronAPI?.getTelegramConfig)
+    console.log('[TelegramView] Checking for API...', typeof window.electronAPI?.getTelegramConfig === 'function')
     
     const checkAPI = () => {
       const api = (window as any).electronAPI
@@ -62,7 +62,7 @@ export default function TelegramView(): React.ReactElement {
   }, [])
 
   const loadData = async () => {
-    if (!window.electronAPI?.getTelegramConfig) {
+    if (typeof window.electronAPI?.getTelegramConfig !== 'function') {
       setLoading(false)
       return
     }
@@ -78,7 +78,7 @@ export default function TelegramView(): React.ReactElement {
   }
 
   const updateStatus = async () => {
-    if (!window.electronAPI?.getTelegramStatus) return
+    if (typeof window.electronAPI?.getTelegramStatus !== 'function') return
     try {
       const currentStatus = await window.electronAPI.getTelegramStatus()
       setStatus(currentStatus)
@@ -129,7 +129,7 @@ export default function TelegramView(): React.ReactElement {
     }
   }
 
-  if (loading && window.electronAPI?.getTelegramConfig) {
+  if (loading && typeof window.electronAPI?.getTelegramConfig === 'function') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'rgba(255,255,255,0.4)' }}>
         <Loader2 className="animate-spin" size={24} />
@@ -137,7 +137,7 @@ export default function TelegramView(): React.ReactElement {
     )
   }
 
-  if (!window.electronAPI?.getTelegramConfig) {
+  if (typeof window.electronAPI?.getTelegramConfig !== 'function') {
     return (
       <div style={{ 
         display: 'flex', 

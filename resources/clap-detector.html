@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Clap Detector</title></head>
+<body>
+<script>
+  // Double-clap detection via Web Audio API
+  // Spike threshold: amplitude deviation from center (128) must exceed SPIKE_THRESHOLD
+  // Double clap: two spikes MIN_GAP–MAX_GAP ms apart
+  // After wake: 2s global cooldown before listening again
+
+  const SPIKE_THRESHOLD = 90   // out of 128 — tune up if too sensitive
+  const MIN_GAP = 150          // ms — minimum time between two claps
+  const MAX_GAP = 900          // ms — maximum time between two claps
+  const CLAP_COOLDOWN_MS = 250 // ms — debounce per individual clap
+  const WAKE_COOLDOWN_MS = 2500
+
+  let lastClapTime = 0
+  let inClapDebounce = false
+  let inWakeCooldown = false
+
+  function start(stream) {
+    const audioCtx = new AudioContext()
+    const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 512
+    source.connect(analyser)
+
+    const buffer = new Uint8Array(analyser.frequencyBinCount)
+
+    function loop() {
+      analyser.getByteTimeDomainData(buffer)
+
+      let maxDelta = 0
+      for (let i = 0; i < buffer.length; i++) {
+        const d = Math.abs(buffer[i] - 128)
+        if (d > maxDelta) maxDelta = d
+      }
+
+      if (maxDelta > SPIKE_THRESHOLD && !inClapDebounce && !inWakeCooldown) {
+        inClapDebounce = true
+        setTimeout(() => { inClapDebounce = false }, CLAP_COOLDOWN_MS)
+
+        const now = Date.now()
+        const gap = now - lastClapTime
+
+        if (lastClapTime > 0 && gap >= MIN_GAP && gap <= MAX_GAP) {
+          // Double clap detected!
+          inWakeCooldown = true
+          lastClapTime = 0
+          window.clapBridge.sendClap()
+          setTimeout(() => { inWakeCooldown = false }, WAKE_COOLDOWN_MS)
+        } else {
+          lastClapTime = now
+        }
+      }
+
+      requestAnimationFrame(loop)
+    }
+
+    loop()
+  }
+
+  navigator.mediaDevices
+    .getUserMedia({ audio: true, video: false })
+    .then(start)
+    .catch(err => console.error('[ClapDetector] Mic access denied:', err))
+</script>
+</body>
+</html>

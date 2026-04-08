@@ -6,16 +6,18 @@ interface MousePos {
   y: number
 }
 
-export function useAttention() {
+export function useAttention({ active = true }: { active?: boolean } = {}) {
   const [mousePos, setMousePos] = useState<MousePos>({ x: 0, y: 0 })
   const [focusElement, setFocusElement] = useState<AXElement | null>(null)
   const [isIdle, setIsIdle] = useState(false)
-  
+
   const lastPosRef = useRef<MousePos>({ x: 0, y: 0 })
   const dwellStartTimeRef = useRef<number>(Date.now())
   const lastFocusAttemptRef = useRef<number>(0)
 
   useEffect(() => {
+    if (!active) return
+
     const pollInterval = setInterval(async () => {
       try {
         // 1. Get Mouse Location
@@ -28,7 +30,7 @@ export function useAttention() {
 
         // 3. Dwell-Time Logic (Focus Detection)
         const dist = Math.sqrt(
-          Math.pow(pos.x - lastPosRef.current.x, 2) + 
+          Math.pow(pos.x - lastPosRef.current.x, 2) +
           Math.pow(pos.y - lastPosRef.current.y, 2)
         )
 
@@ -40,7 +42,7 @@ export function useAttention() {
         } else {
           // Mouse is dwelling
           const dwellTime = now - dwellStartTimeRef.current
-          
+
           if (dwellTime > 1500 && now - lastFocusAttemptRef.current > 2000) {
             // Implicit Intent Detected: User is dwelling on a location
             lastFocusAttemptRef.current = now
@@ -53,17 +55,19 @@ export function useAttention() {
     }, 200)
 
     return () => clearInterval(pollInterval)
-  }, [])
+  }, [active])
 
   const identifyElementAt = async (x: number, y: number) => {
     try {
       const pid = await window.electronAPI.getFrontmostAppPid()
       if (!pid) return
 
-      // Use the existing native function to list elements
-      // We'll filter for the one that contains the mouse coordinates
-      const elements = await window.electronAPI.listUIElements(pid, 5) 
-      const hit = elements.find((el: AXElement) => 
+      // Depth 2 avoids deep recursion into complex UI trees that can contain
+      // CFNumber attributes where the native module expects CFString (crash).
+      const elements = await window.electronAPI.listUIElements(pid, 2)
+      if (!Array.isArray(elements)) return
+
+      const hit = elements.find((el: AXElement) =>
         x >= el.x && x <= el.x + el.width &&
         y >= el.y && y <= el.y + el.height
       )
