@@ -59,6 +59,7 @@ export interface AIAction {
     | 'screenshot'
     | 'orchestrate_task'
     | 'scrape_url'
+    | 'store_memory'
     | 'none'
   payload?: {
     name?: string
@@ -72,6 +73,10 @@ export interface AIAction {
     cmd?: string
     script?: string
     taskTree?: Array<{ id: string; agent: string; task: string; status?: 'pending' | 'running' | 'done' | 'failed'; retries?: number; result?: string }>
+    // store_memory fields
+    category?: 'user' | 'project' | 'system' | 'procedure' | 'error'
+    content?: string
+    confidence?: number
   }
 }
 

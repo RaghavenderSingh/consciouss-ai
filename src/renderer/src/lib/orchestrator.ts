@@ -2,6 +2,8 @@ import { AIResponse, HTNNode, Message, SystemInfo } from '../types'
 import { AGENT_ROLES, AgentRole, PROMPTS } from './prompts'
 import { executeAction } from './actions'
 import { scanRawActiveApp, formatUITree } from './accessibility'
+import { annotateScreenshot, formatSoMTable } from './setOfMark'
+import { queryRelevantFacts, formatMemoryContext } from './memory'
 
 const MAX_HANDOFFS = 12
 const MAX_NODE_RETRIES = 2
@@ -21,7 +23,7 @@ export interface SwarmState {
 
 export type SwarmUpdateCallback = (state: SwarmState, output?: AIResponse) => void
 
-// ─── Helper: grab context (screenshot + UI tree + deep system info) ────────────
+// ─── Helper: gather context (screenshot + SoM annotation + UI tree + deep system info) ──
 async function gatherContext(): Promise<{
   screenshot: string | null
   uiTree: string
@@ -36,7 +38,27 @@ async function gatherContext(): Promise<{
   }
 
   const rawElements = await scanRawActiveApp()
-  const uiTree = formatUITree(rawElements)
+
+  // ─── Phase 3: Set-of-Mark Visual Grounding ───────────────────────────────────
+  let annotatedScreenshot = screenshot
+  let somTable = formatUITree(rawElements)  // fallback to plain table
+
+  if (screenshot && rawElements.length > 0) {
+    try {
+      // Use screen physical width from screen info if available
+      const screenW = window.screen.width * (window.devicePixelRatio || 1)
+      const { annotatedDataURL, elements: somElements } = await annotateScreenshot(
+        screenshot,
+        rawElements,
+        screenW
+      )
+      annotatedScreenshot = annotatedDataURL
+      somTable = formatSoMTable(somElements)
+      console.log(`[Orchestrator] 🏷️ SoM: annotated ${somElements.length} elements on screenshot`)
+    } catch (err) {
+      console.warn('[Orchestrator] SoM annotation failed, using plain UI tree:', err)
+    }
+  }
 
   const systemInfo = (await window.electronAPI.systemInfo()) as SystemInfo
   const activeText = rawElements
@@ -44,15 +66,28 @@ async function gatherContext(): Promise<{
     .map((el) => `[${el.role}] ${el.title || el.description || 'Editor'}: ${el.value}`)
     .join('\n')
 
+  // ─── Phase 4: Inject long-term memory context ──────────────────────────────
+  let memoryContext = ''
+  try {
+    const relevantFacts = await queryRelevantFacts(
+      rawElements.map(e => e.title || e.description || '').join(' '),
+      3
+    )
+    memoryContext = formatMemoryContext(relevantFacts)
+  } catch {
+    // Memory read failed — non-fatal, continue without it
+  }
+
   const deepContext = `
 --- DEEP_SYSTEM_CONTEXT ---
 CWD: ${systemInfo.cwd || 'Unknown'}
 OS: ${systemInfo.osVersion}
 ACTIVE_FILE_TEXT:
 ${activeText || 'No active text detected.'}
-----------------------------`
+----------------------------
+${memoryContext}`
 
-  return { screenshot, uiTree, deepContext }
+  return { screenshot: annotatedScreenshot, uiTree: somTable, deepContext }
 }
 
 export class SovereignOrchestrator {

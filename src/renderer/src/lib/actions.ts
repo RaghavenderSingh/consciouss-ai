@@ -1,4 +1,5 @@
 import { AIAction, CaptureResult } from '../types'
+import { upsertFact, MemoryCategory } from './memory'
 
 export async function executeAction(
   action: AIAction,
@@ -115,8 +116,22 @@ export async function executeAction(
         return `[SCRAPE RESULT FOR ${p.url}]:\n${markdown.substring(0, 8000)}... (truncated for context)`
       }
 
+      case 'store_memory': {
+        const category = (p.category as MemoryCategory) || 'user'
+        const content = p.content
+        if (!content) {
+          console.warn('[actions] store_memory missing content')
+          break
+        }
+        const fact = await upsertFact(category, content, p.confidence ?? 0.8)
+        console.log(`[actions] 🧠 Memory stored: [${category}] ${content.slice(0, 60)}... (id: ${fact.id})`)
+        onStatus?.('done')
+        return `Memory stored: "${content.slice(0, 80)}"`
+      }
+
       case 'none':
         break
+
 
       default:
         console.warn(`[actions] Unknown action type: ${(action as AIAction).type}`)

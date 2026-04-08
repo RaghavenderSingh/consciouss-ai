@@ -70,11 +70,11 @@ const electronAPI = {
   setWindowSize: (mode: 'expanded' | 'companion' | 'pill' | 'spotlight'): Promise<void> =>
     ipcRenderer.invoke('set-window-size', mode),
 
-  // Memory
-  readMemory: (): Promise<{ summary: string; updatedAt: string } | null> =>
+  // Memory — upgraded to full MemoryStore schema
+  readMemory: (): Promise<any | null> =>
     ipcRenderer.invoke('read-memory'),
 
-  writeMemory: (summary: string): Promise<void> => ipcRenderer.invoke('write-memory', summary),
+  writeMemory: (store: any): Promise<void> => ipcRenderer.invoke('write-memory', store),
 
   // Audio transcription (Groq Whisper via main process — no CORS issues)
   transcribeAudio: (buffer: Uint8Array, mimeType: string): Promise<string> =>

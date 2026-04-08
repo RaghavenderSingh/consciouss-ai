@@ -43,8 +43,8 @@ export interface ElectronBridge {
   readChats(): Promise<any[]>
   writeChats(sessions: any[]): Promise<void>
   setWindowSize(mode: 'expanded' | 'companion' | 'pill' | 'spotlight'): Promise<void>
-  readMemory(): Promise<{ summary: string; updatedAt: string } | null>
-  writeMemory(summary: string): Promise<void>
+  readMemory(): Promise<any | null>
+  writeMemory(store: any): Promise<void>
   onWakeShortcut(callback: () => void): void
   transcribeAudio(buffer: Uint8Array, mimeType: string): Promise<string>
   googleAuth(): Promise<{ id: string; name: string; email: string; avatarUrl: string; subscription: string }>

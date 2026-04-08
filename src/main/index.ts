@@ -679,7 +679,7 @@ ipcMain.handle('start-telegram-discovery', () => {
   return { success: true }
 })
 
-// ── Session memory ────────────────────────────────────────────────────────────
+// ── Session memory (upgraded: full MemoryStore JSON) ─────────────────────────
 ipcMain.handle('read-memory', () => {
   try {
     if (!existsSync(MEMORY_PATH)) return null
@@ -689,15 +689,9 @@ ipcMain.handle('read-memory', () => {
   }
 })
 
-ipcMain.handle('write-memory', (_, summary: string) => {
+ipcMain.handle('write-memory', (_, store: any) => {
   try {
-    writeFileSync(
-      MEMORY_PATH,
-      JSON.stringify({
-        summary,
-        updatedAt: new Date().toISOString()
-      })
-    )
+    writeFileSync(MEMORY_PATH, JSON.stringify(store, null, 2))
   } catch (err) {
     console.error('[Memory] write failed:', err)
   }
