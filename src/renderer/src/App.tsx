@@ -1,27 +1,20 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { AIAction, ActionStatus, AppState, Message, CaptureResult, ChatSession, User, LoginLog } from './types'
+import { AppState, Message, ChatSession, User } from './types'
 
 import SplashScreen from './components/SplashScreen'
-import CommandBar from './components/CommandBar'
 import ChatPanel from './components/ChatPanel'
 import Sidebar from './components/Sidebar'
 import GlassContainer from './components/GlassContainer'
 import ControlStrip from './components/ControlStrip'
-import HomeView from './components/HomeView'
 import SpotlightBar from './components/SpotlightBar'
-import LoginView from './components/LoginView'
-import LoginLogsView from './components/LoginLogsView'
-import TelegramView from './components/TelegramView'
-import WorkflowsView from './components/WorkflowsView'
-import NativeLab from './components/NativeLab'
+import CommandBar from './components/CommandBar'
+import SovereignHUD from './components/SovereignHUD'
 
 import { useOpenRouter } from './hooks/useOpenRouter'
 import { useScreenCapture } from './hooks/useScreenCapture'
 import { useVoiceInput } from './hooks/useVoiceInput'
-import { executeAction } from './lib/actions'
-import { ActiveApp } from './components/ContextStrip'
-import { scanActiveApp } from './lib/accessibility'
+import { useAttention } from './hooks/useAttention'
+import { SovereignOrchestrator } from './lib/orchestrator'
 
 export default function App(): ReactElement {
   const [appState, setAppState] = useState<AppState>('splash')
@@ -30,13 +23,10 @@ export default function App(): ReactElement {
   const [messages, setMessages] = useState<Message[]>([])
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [workingTimer, setWorkingTimer] = useState(60)
-  const sessionMemory = null
-  const [activeApp, setActiveApp] = useState<ActiveApp | null>(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [activeTab, setActiveTab] = useState<'chats' | 'workflows' | 'logs' | 'telegram' | 'lab'>('chats')
 
-  // ── Auth state ───────────────────────────────────────────────────────────────
   const [user, setUser] = useState<User | null>(() => {
     try {
       const stored = localStorage.getItem('consciouss_user')
@@ -45,158 +35,86 @@ export default function App(): ReactElement {
       return null
     }
   })
-  const [loginLogs, setLoginLogs] = useState<LoginLog[]>(() => {
-    try {
-      const stored = localStorage.getItem('consciouss_login_logs')
-      return stored ? JSON.parse(stored) : []
-    } catch {
-      return []
-    }
-  })
-  const [hasSeenSplash, setHasSeenSplash] = useState(false)
-  const [hasSkippedLogin, setHasSkippedLogin] = useState(
+  
+  const [hasSkippedLogin] = useState(
     () => localStorage.getItem('consciouss_skipped_login') === 'true'
   )
 
   const isCompanion = windowWidth <= 420
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { sendMessage, isStreaming, streamingText, error: aiError } = useOpenRouter()
+  const { sendMessage, isStreaming, streamingText } = useOpenRouter()
   const { startCapture } = useScreenCapture()
+  const { focusElement } = useAttention({ active: appState !== 'spotlight' })
 
-  // ── Session Management ───────────────────────────────────────────────────
+  const isHud = window.location.hash === '#hud'
 
-  // Load sessions from disk on mount
+  useEffect(() => {
+    if (!isHud && focusElement) {
+      window.electronAPI.attentionFocus(focusElement)
+    }
+  }, [focusElement, isHud])
+
+  // --- Sovereign Research Agent (Proactive Phase 1) ---
+  const isResearchingRef = useRef(false)
+  useEffect(() => {
+    if (isHud || !focusElement || isResearchingRef.current) return
+    const title = (focusElement.title || '').toLowerCase()
+    const desc = (focusElement.description || '').toLowerCase()
+    if (title.includes('error') || title.includes('exception') || desc.includes('error')) {
+      isResearchingRef.current = true
+      sendMessage(
+        `Implicit intent: Help me with this error: "${focusElement.title}"`,
+        null,
+        [],
+        null,
+        null,
+        { silent: true }
+      ).then((res) => {
+        if (res) {
+          window.electronAPI.attentionFocus({ ...focusElement, title: `Insight: ${res.message.slice(0, 50)}...` })
+        }
+        isResearchingRef.current = false
+      })
+    }
+  }, [focusElement, isHud, sendMessage])
+
   useEffect(() => {
     window.electronAPI?.readChats?.().then((data: ChatSession[]) => {
-      const initialId = `session-${Date.now()}`
-      const initialSession: ChatSession = {
-        id: initialId,
-        title: 'New Chat',
-        messages: [],
-        lastActive: new Date()
-      }
-
       if (data && data.length > 0) {
-        const sorted = [...data].sort(
-          (a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime()
-        )
-
-        if (sorted[0].messages.length === 0) {
-          setSessions(sorted)
-          setCurrentSessionId(sorted[0].id)
-        } else {
-          setSessions([initialSession, ...sorted])
-          setCurrentSessionId(initialId)
-        }
+        setSessions(data)
+        setCurrentSessionId(data[0].id)
+        setMessages(data[0].messages)
       } else {
-        setSessions([initialSession])
-        setCurrentSessionId(initialId)
+        handleNewChat()
       }
-
-      setMessages([])
       setAppState('idle')
     })
   }, [])
 
-  // Auto-save sessions when they change
-  const isInitialMount = useRef(true)
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false
-      return
-    }
-    window.electronAPI?.writeChats?.(sessions)
-  }, [sessions])
-
-  // ── Handlers ─────────────────────────────────────────────────────────────
-
-  const startChips = useCallback((): void => { }, [])
-  const stopChips = useCallback((): void => { }, [])
-
-  const startTimer = useCallback((): void => {
-    setWorkingTimer(60)
-    countdownRef.current = setInterval(() => {
-      setWorkingTimer((t) => {
-        if (t <= 1) {
-          clearInterval(countdownRef.current!)
-          return 0
-        }
-        return t - 1
-      })
-    }, 1000)
-  }, [])
-
-  const stopTimer = useCallback((): void => {
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current)
-      countdownRef.current = null
-    }
-  }, [])
-
-  const handleStop = useCallback((): void => {
-    stopChips()
-    stopTimer()
-    setAppState(messages.length > 0 ? 'chat' : 'idle')
-  }, [messages.length, stopChips, stopTimer])
-
-  const handleNewChat = useCallback(async (): Promise<void> => {
-    if (messages.length === 0 && currentSessionId) {
-      setAppState('idle')
-      setActiveApp(null)
-      stopChips()
-      stopTimer()
-      await window.electronAPI?.setWindowSize('expanded')
-      return
-    }
-
-    const newId = `session-${Date.now()}`
-    const newSession: ChatSession = {
-      id: newId,
-      title: 'New Chat',
-      messages: [],
-      lastActive: new Date()
-    }
-
-    setSessions((prev) => [newSession, ...prev])
+  const handleNewChat = useCallback(() => {
+    const newId = `session-${crypto.randomUUID()}`
+    const newSession: ChatSession = { id: newId, title: 'New Chat', messages: [], lastActive: new Date() }
+    setSessions(prev => [newSession, ...prev])
     setCurrentSessionId(newId)
     setMessages([])
-    setActiveApp(null)
     setAppState('idle')
-    stopChips()
-    stopTimer()
-    await window.electronAPI?.setWindowSize('expanded')
-  }, [messages.length, currentSessionId, stopChips, stopTimer])
+  }, [])
 
-  const handleSelectSession = useCallback(
-    (id: string) => {
-      const session = sessions.find((s) => s.id === id)
-      if (session) {
-        setCurrentSessionId(id)
-        setMessages(session.messages)
-        setAppState(session.messages.length > 0 ? 'chat' : 'idle')
-      }
-    },
-    [sessions]
-  )
+  const handleSelectSession = useCallback((id: string) => {
+    const s = sessions.find(x => x.id === id)
+    if (s) {
+      setCurrentSessionId(id)
+      setMessages(s.messages)
+      setAppState(s.messages.length > 0 ? 'chat' : 'idle')
+    }
+  }, [sessions])
 
-  const handleDeleteSession = useCallback(
-    (id: string, e?: React.MouseEvent) => {
-      e?.stopPropagation()
-      const updated = sessions.filter((s) => s.id !== id)
-      setSessions(updated)
-      window.electronAPI?.writeChats?.(updated)
-
-      if (currentSessionId === id) {
-        if (updated.length > 0) {
-          handleSelectSession(updated[0].id)
-        } else {
-          handleNewChat()
-        }
-      }
-    },
-    [sessions, currentSessionId, handleSelectSession, handleNewChat]
-  )
+  const handleDeleteSession = useCallback((id: string) => {
+    const updated = sessions.filter(s => s.id !== id)
+    setSessions(updated)
+    window.electronAPI?.writeChats?.(updated)
+  }, [sessions])
 
   const handleClearAllSessions = useCallback(() => {
     setSessions([])
@@ -204,173 +122,59 @@ export default function App(): ReactElement {
     handleNewChat()
   }, [handleNewChat])
 
-  const handleSubmit = useCallback(
-    async (text: string, source: 'ui' | 'telegram' = 'ui') => {
-      setVoiceTranscript('')
+  const handleSubmit = useCallback(async (text: string, source: 'ui' | 'telegram' = 'ui') => {
+    setVoiceTranscript('')
+    const timestamp = new Date()
+    const newUserMsg: Message = { id: `msg-${Date.now()}`, role: 'user', content: text, timestamp }
 
-      const timestamp = new Date()
-      const newUserMsg: Message = {
-        id: `msg-${Date.now()}`,
-        role: 'user',
-        content: text,
-        timestamp
+    setMessages(prev => {
+      const next = [...prev, newUserMsg]
+      if (currentSessionId) {
+        setSessions(sPrev => sPrev.map(s => s.id === currentSessionId ? { ...s, messages: next, lastActive: timestamp } : s))
       }
+      return next
+    })
 
-      // Update session title if first message
-      if (messages.length === 0 && currentSessionId) {
-        const title = text.length > 30 ? text.slice(0, 30) + '...' : text
-        setSessions((prev) =>
-          prev.map((s) => (s.id === currentSessionId ? { ...s, title, lastActive: timestamp } : s))
-        )
-      }
+    setAppState('working')
+    setWorkingTimer(60)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    countdownRef.current = setInterval(() => setWorkingTimer(t => (t > 0 ? t - 1 : 0)), 1000)
 
-      setMessages((prev) => {
-        const next = [...prev, newUserMsg]
-        // Sync to sessions array
-        if (currentSessionId) {
-          setSessions((sPrev) =>
-            sPrev.map((s) =>
-              s.id === currentSessionId ? { ...s, messages: next, lastActive: timestamp } : s
-            )
-          )
-        }
-        return next
-      })
+    try {
+      const orchestrator = new SovereignOrchestrator(
+        text,
+        [...messages, newUserMsg],
+        sendMessage,
+        (state, aiResponse) => {
+          // Map planPhase to UI appState
+          if (state.planPhase === 'planning') setAppState('working')
+          else if (state.planPhase === 'executing') setAppState('executing')
+          else if (state.planPhase === 'recovering') setAppState('working')
 
-      setAppState('working')
-      startChips()
-      startTimer()
-
-      try {
-        let stitched: string | null = null
-        try {
-          const res = (await window.electronAPI?.captureScreen()) as CaptureResult
-          if (res && res.screens && res.totalBounds) {
-            const canvas = document.createElement('canvas')
-            const { screens, totalBounds } = res
-            const fullW = totalBounds.right - totalBounds.left
-            const fullH = totalBounds.bottom - totalBounds.top
-            const scale = 1280 / fullW
-            canvas.width = 1280
-            canvas.height = fullH * scale
-            const ctx = canvas.getContext('2d')
-            if (ctx) {
-              for (const s of screens) {
-                const img = new Image()
-                img.src = s.dataURL
-                await new Promise((resolve) => {
-                  img.onload = resolve
-                })
-                ctx.drawImage(
-                  img,
-                  (s.bounds.x - totalBounds.left) * scale,
-                  (s.bounds.y - totalBounds.top) * scale,
-                  s.bounds.width * scale,
-                  s.bounds.height * scale
-                )
-              }
-              stitched = canvas.toDataURL('image/jpeg', 0.8)
+          if (aiResponse) {
+            // Prepend inner thought to message if present (adds transparency)
+            const thoughtPrefix = aiResponse.thought ? `💭 *${aiResponse.thought}*\n\n` : ''
+            const agentMsg: Message = {
+              id: `msg-${Date.now()}-${state.activeAgent}`,
+              role: 'assistant',
+              content: `${thoughtPrefix}${aiResponse.message}`,
+              timestamp: new Date(),
+              action: aiResponse.action,
+              agent: state.activeAgent,
+              actionStatus: aiResponse.action.type !== 'none' ? 'done' : undefined
             }
-          } else {
-            stitched = res?.dataURL || null
-          }
-        } catch (captureErr) {
-          console.error('[App] Initial screenshot failure, continuing without vision:', captureErr)
-        }
-
-        const uiTree = await scanActiveApp()
-
-        const aiResponse = await sendMessage(
-          text,
-          stitched,
-          messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-          sessionMemory,
-          uiTree
-        )
-
-        stopChips()
-        stopTimer()
-
-        if (!aiResponse) {
-          setAppState('chat')
-          return
-        }
-
-
-        const agentMsgId = `msg-${Date.now()}-ai`
-        const agentMsg: Message = {
-          id: agentMsgId,
-          role: 'assistant',
-          content: aiResponse.message,
-          timestamp: new Date(),
-          action: aiResponse.action,
-          actionStatus: aiResponse.action.type !== 'none' ? 'pending' : undefined
-        }
-
-        setMessages((prev) => {
-          const next = [...prev, agentMsg]
-          if (currentSessionId) {
-            setSessions((sPrev) =>
-              sPrev.map((s) =>
-                s.id === currentSessionId ? { ...s, messages: next, lastActive: new Date() } : s
-              )
-            )
-          }
-          return next
-        })
-
-        if (aiResponse.action.type !== 'none') {
-          const loopHistory = [
-            ...messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-            { role: 'user' as const, content: text },
-            { role: 'assistant' as const, content: aiResponse.message }
-          ]
-
-          const executeStep = async (action: AIAction, msgId: string): Promise<string> => {
-            if (action.type === 'none') return 'No action'
-            await window.electronAPI?.setWindowSize('companion')
-            setAppState('executing')
-            setMessages((prev) => {
-              const next = prev.map((m) =>
-                m.id === msgId ? { ...m, actionStatus: 'running' as ActionStatus } : m
-              )
+            setMessages(prev => {
+              const next = [...prev, agentMsg]
               if (currentSessionId) {
-                setSessions((sPrev) =>
-                  sPrev.map((s) => (s.id === currentSessionId ? { ...s, messages: next } : s))
-                )
+                setSessions(sPrev => sPrev.map(s => s.id === currentSessionId ? { ...s, messages: next, lastActive: new Date() } : s))
               }
               return next
             })
-
-            let result = ''
-            try {
-              const output = await executeAction(action, (status) => {
-                setMessages((prev) => {
-                  const next = prev.map((m) =>
-                    m.id === msgId ? { ...m, actionStatus: status as ActionStatus } : m
-                  )
-                  if (currentSessionId) {
-                    setSessions((sPrev) =>
-                      sPrev.map((s) => (s.id === currentSessionId ? { ...s, messages: next } : s))
-                    )
-                  }
-                  return next
-                })
-                if (status === 'done' && action.type === 'open_app') {
-                  setActiveApp({ name: action.payload?.name || 'App', openedAt: new Date() })
-                }
-              })
-              result =
-                action.type === 'screenshot'
-                  ? 'Screenshot captured'
-                  : typeof output === 'string'
-                    ? output
-                    : 'Success'
-            } catch (err) {
-              result = `Error: ${err instanceof Error ? err.message : String(err)}`
-            }
-            return result
+            if (source === 'telegram') window.electronAPI?.sendTelegramReply?.(`[${state.activeAgent}] ${aiResponse.message}`)
           }
+          if (!state.isWorking) {
+            setAppState('chat')
+            if (countdownRef.current) clearInterval(countdownRef.current)
 
           await executeStep(aiResponse.action, agentMsgId)
           let current = aiResponse
@@ -470,115 +274,31 @@ export default function App(): ReactElement {
             })
             current = next
           }
-          setAppState('companion')
-        } else {
-          setAppState('chat')
         }
-        if (source === 'telegram') {
-          window.electronAPI?.sendTelegramReply?.(aiResponse.message)
-        }
-      } catch (err) {
-        console.error('[App] handleSubmit catastrophic failure:', err)
-        setAppState('chat')
-      }
-    },
-    [
-      sendMessage,
-      messages,
-      sessionMemory,
-      startChips,
-      startTimer,
-      stopChips,
-      stopTimer,
-      currentSessionId
-    ]
-  )
+      )
+      await orchestrator.start()
+    } catch (err) {
+      console.error('[App] Sovereign failure:', err)
+      setAppState('chat')
+      if (countdownRef.current) clearInterval(countdownRef.current)
+    }
+  }, [messages, currentSessionId, sendMessage])
 
-  const exitCompanion = useCallback(async (): Promise<void> => {
-    await window.electronAPI?.setWindowSize('expanded')
-    setActiveApp(null)
-    setAppState('chat')
-  }, [])
-
-  useEffect(() => {
-    if (appState !== 'companion' || !activeApp) return
-    const processName = activeApp.name
-    const interval = setInterval(async () => {
-      try {
-        const result = await window.electronAPI?.runCommand(
-          `pgrep -x "${processName}" && echo 1 || echo 0`
-        )
-        if (result?.trim() === '0') exitCompanion()
-      } catch {
-        /* ignore */
-      }
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [appState, activeApp, exitCompanion])
-
-  const handleWakeWord = useCallback((): void => {
+  const handleWakeWord = useCallback(() => {
     window.electronAPI?.setWindowSize('spotlight')
     setAppState('spotlight')
   }, [])
 
   const { isListening, toggleListening } = useVoiceInput({
-    onTranscript: (text: string): void => setVoiceTranscript(text),
+    onTranscript: setVoiceTranscript,
     onWakeWord: handleWakeWord
   })
 
-  // ── Listeners ────────────────────────────────────────────────────────────
-
-  const latestSubmitRef = useRef(handleSubmit)
-  useEffect(() => {
-    latestSubmitRef.current = handleSubmit
-  }, [handleSubmit])
-
   useEffect(() => {
     if (!window.electronAPI) return
-    window.electronAPI.onTelegramMessage((text): void => {
-      latestSubmitRef.current(text, 'telegram')
-    })
-    window.electronAPI.onTelegramStop((): void => handleStop())
-    window.electronAPI.onWakeShortcut((): void => handleWakeWord())
-    window.electronAPI.onTelegramScreenshotRequest(async (): Promise<void> => {
-      const res = await window.electronAPI!.captureScreen()
-      if (res.dataURL) window.electronAPI!.sendTelegramScreenshot(res.dataURL)
-    })
-  }, [handleStop, handleWakeWord])
-
-  // ── UI Helpers ───────────────────────────────────────────────────────────
-
-  const handleSplashComplete = useCallback((): void => {
-    setAppState('idle')
-    setHasSeenSplash(true)
-    window.electronAPI?.setWindowSize('expanded')
-  }, [])
-
-  const handleLogin = useCallback((newUser: User, log: LoginLog): void => {
-    setUser(newUser)
-    localStorage.setItem('consciouss_user', JSON.stringify(newUser))
-    setLoginLogs((prev) => {
-      const updated = [log, ...prev]
-      localStorage.setItem('consciouss_login_logs', JSON.stringify(updated))
-      return updated
-    })
-  }, [])
-
-  const handleLogout = useCallback((): void => {
-    setUser(null)
-    localStorage.removeItem('consciouss_user')
-  }, [])
-
-  const handleSkipLogin = useCallback((): void => {
-    setHasSkippedLogin(true)
-    localStorage.setItem('consciouss_skipped_login', 'true')
-  }, [])
-
-  useEffect(() => {
-    if (appState !== 'splash' && (user || hasSkippedLogin)) {
-      startCapture()
-    }
-  }, [startCapture, appState, user, hasSkippedLogin])
+    window.electronAPI.onTelegramMessage(t => handleSubmit(t, 'telegram'))
+    window.electronAPI.onWakeShortcut(() => handleWakeWord())
+  }, [handleSubmit, handleWakeWord])
 
   useEffect(() => {
     const handler = (): void => setWindowWidth(window.innerWidth)
@@ -592,300 +312,87 @@ export default function App(): ReactElement {
     }
   }, [appState])
 
+  const handleSplashComplete = useCallback(() => {
+    setAppState('idle')
+    window.electronAPI?.setWindowSize('expanded')
+  }, [])
+
   useEffect(() => {
-    return () => {
-      stopChips()
-      stopTimer()
+    if (appState !== 'splash' && (user || hasSkippedLogin)) {
+      startCapture()
     }
-  }, [stopChips, stopTimer])
+  }, [startCapture, appState, user, hasSkippedLogin])
 
-  const inChat =
-    appState === 'chat' ||
-    appState === 'working' ||
-    appState === 'executing' ||
-    appState === 'companion'
-  const isWorking = appState === 'working' || appState === 'executing'
+  if (isHud) return <SovereignHUD />
 
-  const getPlaceholder = (): string => {
-    if (appState === 'working') return 'Processing...'
-    if (appState === 'executing') return 'Executing...'
-    if (isListening) return 'Listening...'
-    if (isCompanion) return 'Ask anything...'
-    return 'Ask Consciouss anything...'
+  // Spotlight mode: full-screen centered overlay, nothing else rendered
+  if (appState === 'spotlight') {
+    return (
+      <div style={{ width: '100vw', height: '100vh', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <SpotlightBar
+          isVisible
+          isListening={isListening}
+          onSubmit={t => { window.electronAPI?.setWindowSize('expanded'); handleSubmit(t) }}
+          onDismiss={() => { window.electronAPI?.setWindowSize('expanded'); setAppState('chat') }}
+        />
+      </div>
+    )
   }
 
+  const isWorking = appState === 'working' || appState === 'executing'
+
   return (
-    <div
-      style={{
-        width: '100vw',
-        height: '100vh',
-        background: 'transparent',
-        display: 'flex',
-        alignItems: appState === 'spotlight' ? 'center' : 'stretch',
-        justifyContent: 'center',
-        padding: appState === 'spotlight' ? 0 : isCompanion ? 8 : 12,
-        gap: isCompanion ? 8 : 12,
-        overflow: 'hidden',
-        position: 'relative',
-        fontFamily: '-apple-system, SF Pro Display, BlinkMacSystemFont, sans-serif'
-      }}
-    >
-      <style>{`
-        body { background: transparent !important; margin: 0; overflow: hidden; height: 100vh; width: 100vw; }
-      `}</style>
-
+    <div style={{ width: '100vw', height: '100vh', background: 'transparent', display: 'flex', overflow: 'hidden' }}>
       <SplashScreen onComplete={handleSplashComplete} />
-
-      <SpotlightBar
-        isVisible={appState === 'spotlight'}
-        isListening={isListening}
-        onSubmit={(text): void => {
-          window.electronAPI?.setWindowSize('expanded')
-          setTimeout(() => {
-            setAppState('idle')
-            handleSubmit(text)
-          }, 300)
-        }}
-        onDismiss={async (): Promise<void> => {
-          await window.electronAPI?.setWindowSize('expanded')
-          setAppState(messages.length > 0 ? 'chat' : 'idle')
-        }}
-      />
-
-      <AnimatePresence>
-        {appState !== 'spotlight' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              display: 'flex',
-              flex: 1,
-              height: '100%',
-              gap: isCompanion ? 8 : 20,
-              width: '100%',
-              alignItems: 'stretch'
-            }}
-          >
-            {!isCompanion && (
-              <Sidebar
-                isCollapsed={isSidebarCollapsed}
-                onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                onNewChat={handleNewChat}
-                sessions={sessions}
-                activeSessionId={currentSessionId || undefined}
-                onSelectSession={handleSelectSession}
-                onDeleteSession={handleDeleteSession}
-                onClearAll={handleClearAllSessions}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                user={user}
-                onLogout={handleLogout}
-              />
-            )}
-
-            <GlassContainer
-              intensity="high"
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                position: 'relative',
-                minWidth: 0,
-                zIndex: 2,
-                border: `1px solid ${isStreaming ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.03)'}`,
-                transition: 'border-color 0.5s ease',
-                borderRadius: isCompanion ? 16 : 32
-              }}
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '16px 24px',
-                  flexShrink: 0,
-                  zIndex: 100,
-                  pointerEvents: 'none'
-                }}
-              >
-
-
-                <div
-                  style={{ display: 'flex', alignItems: 'center', gap: 16, pointerEvents: 'auto' }}
-                >
-                </div>
-              </div>
-
-              <div
-                style={{
-                  flex: 1,
-                  position: 'relative',
-                  overflow: 'hidden',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                <AnimatePresence mode="wait">
-                  {inChat ? (
-                    <motion.div
-                      key="chat"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{
-                        height: '100%',
-                        width: '100%',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column'
-                      }}
-                    >
-                      <ChatPanel
-                        messages={messages}
-                        isStreaming={isStreaming}
-                        streamingText={streamingText}
-                        activeApp={activeApp}
-                        isCompact={isCompanion}
-                      />
-                    </motion.div>
-                  ) : activeTab === 'telegram' ? (
-                    <motion.div
-                      key="telegram"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
-                    >
-                      <TelegramView />
-                    </motion.div>
-                  ) : activeTab === 'workflows' ? (
-                    <motion.div
-                      key="workflows"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
-                    >
-                      <WorkflowsView />
-                    </motion.div>
-                  ) : activeTab === 'lab' ? (
-                    <motion.div
-                      key="lab"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
-                    >
-                      {/* <NativeLab /> */}
-                    </motion.div>
-                  ) : activeTab === 'logs' ? (
-                    <motion.div
-                      key="logs"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
-                    >
-                      <LoginLogsView logs={loginLogs} />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="idle"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{
-                        height: '100%',
-                        width: '100%',
-                        display: 'flex',
-                        flexDirection: 'column'
-                      }}
-                    >
-                      <HomeView
-                        onSubmit={handleSubmit}
-                        isListening={isListening}
-                        toggleListening={toggleListening}
-                        isWorking={isWorking}
-                        voiceTranscript={voiceTranscript}
-                        onNewChat={handleNewChat}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {aiError && (
-                <div
-                  style={{
-                    margin: '0 40px 20px',
-                    padding: '12px 20px',
-                    background: 'rgba(232,25,44,0.05)',
-                    borderRadius: 12,
-                    fontSize: 13,
-                    color: '#fca5a5',
-                    border: '1px solid rgba(232,25,44,0.1)'
-                  }}
-                >
-                  {aiError}
-                </div>
-              )}
-
-              <AnimatePresence>
-                {inChat && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 20 }}
-                    style={{
-                      padding: isCompanion ? '0 10px 10px' : '0 32px 32px',
-                      flexShrink: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: isCompanion ? 6 : 12
-                    }}
-                  >
-                    <ControlStrip
-                      isWorking={isWorking}
-                      timeRemaining={workingTimer}
-                      onStop={handleStop}
-                      onPause={() => { }}
-                      isCompact={isCompanion}
-                    />
-                    <CommandBar
-                      onSubmit={handleSubmit}
-                      onMicClick={toggleListening}
-                      isListening={isListening}
-                      isWorking={isWorking}
-                      voiceTranscript={voiceTranscript}
-                      onNewChat={handleNewChat}
-                      placeholder={getPlaceholder()}
-                      isCompact={isCompanion}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </GlassContainer>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {hasSeenSplash && !user && !hasSkippedLogin && (
-        <LoginView onLogin={handleLogin} onSkip={handleSkipLogin} />
+      
+      {!isCompanion && (
+        <Sidebar 
+          isCollapsed={isSidebarCollapsed}
+          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          sessions={sessions} 
+          activeSessionId={currentSessionId || undefined} 
+          onSelectSession={handleSelectSession} 
+          onDeleteSession={handleDeleteSession} 
+          onNewChat={handleNewChat} 
+          onClearAll={handleClearAllSessions} 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+          user={user} 
+          onLogout={() => setUser(null)} 
+        />
       )}
+
+      <GlassContainer style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 32, margin: 12, overflow: 'hidden', position: 'relative' }}>
+        <ChatPanel 
+          messages={messages} 
+          isStreaming={isStreaming} 
+          streamingText={streamingText}
+          activeApp={null}
+          isCompact={isCompanion}
+        />
+        
+        <div style={{ padding: isCompanion ? '0 12px 12px' : '0 40px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <CommandBar 
+            onSubmit={handleSubmit}
+            onMicClick={toggleListening}
+            isListening={isListening}
+            isWorking={isWorking}
+            voiceTranscript={voiceTranscript}
+            onNewChat={handleNewChat}
+            isCompact={isCompanion}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <ControlStrip 
+              isWorking={isWorking} 
+              timeRemaining={workingTimer}
+              onStop={() => setAppState('chat')} 
+              onPause={() => {}}
+              isCompact={isCompanion}
+            />
+          </div>
+        </div>
+      </GlassContainer>
     </div>
   )
 }

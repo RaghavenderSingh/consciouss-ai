@@ -7,6 +7,7 @@ export interface Message {
   timestamp: Date
   action?: AIAction
   actionStatus?: ActionStatus
+  agent?: string
 }
 
 export interface ChatSession {
@@ -56,6 +57,9 @@ export interface AIAction {
     | 'run_command'
     | 'applescript'
     | 'screenshot'
+    | 'orchestrate_task'
+    | 'scrape_url'
+    | 'store_memory'
     | 'none'
   payload?: {
     name?: string
@@ -68,13 +72,33 @@ export interface AIAction {
     text?: string
     cmd?: string
     script?: string
+    taskTree?: Array<{ id: string; agent: string; task: string; status?: 'pending' | 'running' | 'done' | 'failed'; retries?: number; result?: string }>
+    // store_memory fields
+    category?: 'user' | 'project' | 'system' | 'procedure' | 'error'
+    content?: string
+    confidence?: number
   }
 }
 
+export interface HTNNode {
+  id: string
+  agent: string
+  task: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  retries: number
+  result?: string
+}
+
 export interface AIResponse {
+  thought?: string
   message: string
   action: AIAction
+  handoff?: {
+    target: string
+    reason: string
+  }
   continue_task?: boolean
+  replan?: boolean
 }
 
 export interface ScreenInfo {
@@ -140,10 +164,21 @@ export interface Workflow {
   runCount: number
 }
 
+export interface SystemInfo {
+  cpuBrand: String,
+  cpuCount: number,
+  memTotalMb: number,
+  memUsedMb: number,
+  osVersion: String,
+  hostname: String,
+  cwd: String,
+}
+
 export interface AXElement {
   role: string
   title: string
   description: string
+  value: string
   x: number
   y: number
   width: number

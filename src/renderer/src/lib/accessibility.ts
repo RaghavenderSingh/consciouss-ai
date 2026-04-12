@@ -33,21 +33,30 @@ export function formatUITree(elements: AXElement[]): string {
 
 /**
  * Orchestrates a UI scan for the current frontmost application.
+ * Returns the raw elements.
  */
-export async function scanActiveApp(): Promise<string> {
+export async function scanRawActiveApp(): Promise<AXElement[]> {
   try {
     const isTrusted = await window.electronAPI.isAccessibilityTrusted()
     if (!isTrusted) {
-      return '(System Permission Error: Accessibility access is not granted.)'
+      console.warn('[accessibility] Not trusted')
+      return []
     }
 
     const pid = await window.electronAPI.getFrontmostAppPid()
-    if (!pid) return 'Failed to detect active application.'
+    if (!pid) return []
 
-    const elements = await window.electronAPI.listUIElements(pid, 7)
-    return formatUITree(elements)
+    return await window.electronAPI.listUIElements(pid, 7)
   } catch (err) {
-    console.error('Scan failed:', err)
-    return 'Error scanning UI elements.'
+    console.error('Raw scan failed:', err)
+    return []
   }
+}
+
+/**
+ * Orchestrates a UI scan and formats it as Markdown.
+ */
+export async function scanActiveApp(): Promise<string> {
+  const elements = await scanRawActiveApp()
+  return formatUITree(elements)
 }

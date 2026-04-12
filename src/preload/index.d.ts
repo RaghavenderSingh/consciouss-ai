@@ -43,8 +43,8 @@ export interface ElectronBridge {
   readChats(): Promise<any[]>
   writeChats(sessions: any[]): Promise<void>
   setWindowSize(mode: 'expanded' | 'companion' | 'pill' | 'spotlight'): Promise<void>
-  readMemory(): Promise<{ summary: string; updatedAt: string } | null>
-  writeMemory(summary: string): Promise<void>
+  readMemory(): Promise<any | null>
+  writeMemory(store: any): Promise<void>
   onWakeShortcut(callback: () => void): void
   transcribeAudio(buffer: Uint8Array, mimeType: string): Promise<string>
   googleAuth(): Promise<{ id: string; name: string; email: string; avatarUrl: string; subscription: string }>
@@ -83,6 +83,7 @@ export interface ElectronBridge {
     memUsedMb: number
     osVersion: string
     hostname: string
+    cwd: string
   }>
   nativeCaptureScreen(displayIndex?: number): Promise<string>
   displayInfo(): Promise<{
@@ -96,6 +97,12 @@ export interface ElectronBridge {
       isMain: boolean
     }>
   }>
+
+  // Attention Telemetry
+  getMouseLocation(): Promise<{ x: number; y: number }>
+  getSystemIdleTime(): Promise<number>
+  attentionFocus(data: any): Promise<void>
+  onHudFocus(callback: (data: any) => void): void
 }
 
 declare global {

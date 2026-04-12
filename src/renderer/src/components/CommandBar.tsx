@@ -159,10 +159,18 @@ export default function CommandBar({
               WebkitAppearance: 'none'
             }}
           >
-            <option value="google/gemini-2.0-flash-001">Gemini Flash</option>
-            <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini Pro</option>
-            <option value="anthropic/claude-3.5-sonnet">Claude Sonnet</option>
-            <option value="openai/gpt-4o">GPT-4o</option>
+            <optgroup label="Free Models">
+              <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini 2.0 Pro (Free)</option>
+              <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (Free)</option>
+              <option value="deepseek/deepseek-r1:free">DeepSeek R1 (Free)</option>
+              <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+              <option value="qwen/qwen-2-7b-instruct:free">Qwen 2 7B (Free)</option>
+            </optgroup>
+            <optgroup label="Premium Models">
+              <option value="google/gemini-2.0-flash-001">Gemini Flash</option>
+              <option value="anthropic/claude-3.5-sonnet">Claude Sonnet</option>
+              <option value="openai/gpt-4o">GPT-4o</option>
+            </optgroup>
           </select>
 
           <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.06)' }} />

@@ -11,6 +11,7 @@ pub struct SystemInfo {
   pub mem_used_mb: i64,
   pub os_version: String,
   pub hostname: String,
+  pub cwd: String,
 }
 
 /// Read the current clipboard text content.
@@ -84,6 +85,10 @@ pub fn get_system_info() -> Result<SystemInfo> {
     .map(|c| c.brand().to_string())
     .unwrap_or_else(|| "Unknown".into());
 
+  let cwd = std::env::current_dir()
+    .map(|p| p.to_string_lossy().to_string())
+    .unwrap_or_else(|_| "Unknown".into());
+
   Ok(SystemInfo {
     cpu_brand,
     cpu_count: sys.cpus().len() as i32,
@@ -91,6 +96,7 @@ pub fn get_system_info() -> Result<SystemInfo> {
     mem_used_mb: (sys.used_memory() / 1_048_576) as i64,
     os_version: System::os_version().unwrap_or_else(|| "Unknown".into()),
     hostname: System::host_name().unwrap_or_else(|| "Unknown".into()),
+    cwd,
   })
 }
 

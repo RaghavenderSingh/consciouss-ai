@@ -14,6 +14,7 @@ Action types and their payloads:
 - 'run_command': { "cmd": "shell command" }
 - 'applescript': { "script": "AppleScript code" }
 - 'screenshot': {} (Manual refresh)
+- 'scrape_url': { "url": "https://..." } (Extracts raw markdown from any webpage for deep research)
 - 'none': {} (Task complete)
 
 ROBUST BROWSER LOGIC (CRITICAL):
@@ -104,7 +105,8 @@ interface UseOpenRouterReturn {
     screenshot?: string | null,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
     memoryContext?: string | null,
-    uiContext?: string | null
+    uiContext?: string | null,
+    options?: { silent?: boolean }
   ) => Promise<AIResponse | null>
   isStreaming: boolean
   streamingText: string
@@ -128,23 +130,26 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
       screenshot?: string | null,
       history?: Array<{ role: 'user' | 'assistant'; content: string }>,
       memoryContext?: string | null,
-      uiContext?: string | null
+      uiContext?: string | null,
+      options?: { silent?: boolean; systemPromptOverride?: string }
     ): Promise<AIResponse | null> => {
       const apiKey = import.meta.env.VITE_OPENROUTER_KEY
       if (!apiKey) {
-        setError('VITE_OPENROUTER_KEY not set')
+        if (!options?.silent) setError('VITE_OPENROUTER_KEY not set')
         return null
       }
 
       abortRef.current?.abort()
       abortRef.current = new AbortController()
 
-      setIsStreaming(true)
-      setStreamingText('')
-      setError(null)
+      if (!options?.silent) {
+        setIsStreaming(true)
+        setStreamingText('')
+        setError(null)
+      }
 
       // Build system prompt with memory context and UI context
-      let systemPromptWithContext = SYSTEM_PROMPT 
+      let systemPromptWithContext = options?.systemPromptOverride || SYSTEM_PROMPT 
       if (memoryContext) systemPromptWithContext += `\n\nPrevious session context:\n${memoryContext}`
       if (uiContext) systemPromptWithContext += `\n\n${uiContext}`
       const historyMessages = (history || []).map((msg) => ({
@@ -209,8 +214,10 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
               const parsed = JSON.parse(data)
               const token: string = parsed.choices?.[0]?.delta?.content ?? ''
               if (token) {
-                fullText += token
-                setStreamingText(fullText)
+                if (!options?.silent) {
+                  fullText += token
+                  setStreamingText(fullText)
+                }
                 onToken?.(token)
               }
             } catch {
@@ -241,7 +248,7 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
           }
         }
 
-        setStreamingText('')
+        if (!options?.silent) setStreamingText('')
         // No need for global state update here, the local 'stitched' is passed to AI
         return aiResponse
       } catch (err: unknown) {
@@ -249,11 +256,11 @@ export function useOpenRouter(onToken?: (token: string) => void): UseOpenRouterR
           return null
         }
         const msg = err instanceof Error ? err.message : 'Unknown error'
-        setError(msg)
+        if (!options?.silent) setError(msg)
         console.error('[useOpenRouter]', msg)
         return null
       } finally {
-        setIsStreaming(false)
+        if (!options?.silent) setIsStreaming(false)
       }
     },
     [onToken] // eslint-disable-line react-hooks/exhaustive-deps

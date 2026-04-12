@@ -70,11 +70,11 @@ const electronAPI = {
   setWindowSize: (mode: 'expanded' | 'companion' | 'pill' | 'spotlight'): Promise<void> =>
     ipcRenderer.invoke('set-window-size', mode),
 
-  // Memory
-  readMemory: (): Promise<{ summary: string; updatedAt: string } | null> =>
+  // Memory — upgraded to full MemoryStore schema
+  readMemory: (): Promise<any | null> =>
     ipcRenderer.invoke('read-memory'),
 
-  writeMemory: (summary: string): Promise<void> => ipcRenderer.invoke('write-memory', summary),
+  writeMemory: (store: any): Promise<void> => ipcRenderer.invoke('write-memory', store),
 
   // Audio transcription (Groq Whisper via main process — no CORS issues)
   transcribeAudio: (buffer: Uint8Array, mimeType: string): Promise<string> =>
@@ -116,7 +116,16 @@ const electronAPI = {
   systemInfo: (): Promise<any> => ipcRenderer.invoke('system-info'),
   nativeCaptureScreen: (displayIndex?: number): Promise<string> =>
     ipcRenderer.invoke('native-capture-screen', { displayIndex }),
-  displayInfo: (): Promise<any> => ipcRenderer.invoke('display-info')
+  displayInfo: (): Promise<any> => ipcRenderer.invoke('display-info'),
+
+  // Attention Telemetry
+  getMouseLocation: (): Promise<{ x: number; y: number }> => ipcRenderer.invoke('get-mouse-location'),
+  getSystemIdleTime: (): Promise<number> => ipcRenderer.invoke('get-system-idle-time'),
+  attentionFocus: (data: any): Promise<void> => ipcRenderer.invoke('attention-focus', data),
+  onHudFocus: (callback: (data: any) => void): void => {
+    ipcRenderer.removeAllListeners('hud-focus')
+    ipcRenderer.on('hud-focus', (_, data) => callback(data))
+  }
 }
 
 if (process.contextIsolated) {
