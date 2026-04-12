@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import CommandBar from './CommandBar'
 import { ContainerTextFlip } from './ContainerTextFlip'
 import OrbShader from './OrbShader'
+import logo from '../assets/logo.svg'
 
 
 
@@ -45,6 +46,16 @@ export default function HomeView({
         gap: 0
       }}
     >
+      {/* Logo */}
+      <motion.img
+        src={logo}
+        alt="Consciouss AI"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+        style={{ width: 200, marginBottom: 32, opacity: 0.85 }}
+      />
+
       {/* Shader Orb — hero centerpiece */}
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}

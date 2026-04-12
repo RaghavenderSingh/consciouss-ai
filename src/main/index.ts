@@ -477,7 +477,7 @@ ipcMain.handle('transcribe-audio', async (_, { buffer, mimeType }: { buffer: Uin
   if (!apiKey) throw new Error('VITE_GROQ_API_KEY not set in .env')
 
   const ext = mimeType.includes('ogg') ? 'ogg' : 'webm'
-  const audioBlob = new Blob([buffer.buffer as ArrayBuffer], { type: mimeType.split(';')[0] })
+  const audioBlob = new Blob([Buffer.from(buffer)], { type: mimeType.split(';')[0] })
 
   const form = new FormData()
   form.append('file', audioBlob, `audio.${ext}`)

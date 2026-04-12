@@ -175,6 +175,104 @@ export default function App(): ReactElement {
           if (!state.isWorking) {
             setAppState('chat')
             if (countdownRef.current) clearInterval(countdownRef.current)
+
+          await executeStep(aiResponse.action, agentMsgId)
+          let current = aiResponse
+          let loopCount = 0
+          const MAX_LOOPS = 5
+
+          while (current.continue_task && loopCount < MAX_LOOPS) {
+            loopCount++
+            await new Promise((r) => setTimeout(r, 2000))
+
+            let freshScreenshot: string | null = null
+            let freshUITree: string | null = null
+            try {
+              freshUITree = await scanActiveApp()
+              const loopRes = (await window.electronAPI?.captureScreen()) as CaptureResult
+              if (loopRes && loopRes.screens && loopRes.totalBounds) {
+                const lCanvas = document.createElement('canvas')
+                const { screens, totalBounds } = loopRes
+                const fullW = totalBounds.right - totalBounds.left
+                const fullH = totalBounds.bottom - totalBounds.top
+                const scale = 1280 / fullW
+                lCanvas.width = 1280
+                lCanvas.height = fullH * scale
+                const lCtx = lCanvas.getContext('2d')
+                if (lCtx) {
+                  for (const s of screens) {
+                    const img = new Image()
+                    img.src = s.dataURL
+                    await new Promise((resolve) => {
+                      img.onload = resolve
+                    })
+                    lCtx.drawImage(
+                      img,
+                      (s.bounds.x - totalBounds.left) * scale,
+                      (s.bounds.y - totalBounds.top) * scale,
+                      s.bounds.width * scale,
+                      s.bounds.height * scale
+                    )
+                  }
+                  freshScreenshot = lCanvas.toDataURL('image/jpeg', 0.8)
+                }
+              } else {
+                freshScreenshot = loopRes?.dataURL || null
+              }
+            } catch (err) {
+              console.error('[App] loop screenshot failure:', err)
+            }
+
+            const sysContext = freshScreenshot
+              ? '(System: Fresh screenshot captured)'
+              : '(System: Warning - Vision unavailable)'
+            const next = await sendMessage(
+              `Task: "${text}". ${sysContext}. RESPONSE MUST BE JSON. IF JS FAILS: Use physical 'click' (e.g. at 600, 400).`,
+              freshScreenshot,
+              loopHistory,
+              sessionMemory,
+              freshUITree
+            )
+            if (!next) break
+
+            loopHistory.push({
+              role: 'assistant' as const,
+              content: `${next.message} (Memory Trace: Executing ${next.action.type})`
+            })
+
+            let currentMsgId = agentMsgId
+            if (next.message !== current.message && next.message.trim() !== '') {
+              currentMsgId = `msg-${Date.now()}-ai`
+              setMessages((prev) => {
+                const nextMsgArr: Message[] = [
+                  ...prev,
+                  {
+                    id: currentMsgId,
+                    role: 'assistant' as const,
+                    content: next.message,
+                    timestamp: new Date(),
+                    action: next.action,
+                    actionStatus: next.action.type !== 'none' ? 'pending' : undefined
+                  }
+                ]
+                if (currentSessionId) {
+                  setSessions((sPrev) =>
+                    sPrev.map((s) =>
+                      s.id === currentSessionId ? { ...s, messages: nextMsgArr } : s
+                    )
+                  )
+                }
+                return nextMsgArr
+              })
+            }
+
+            if (next.action.type === 'none') break
+            const loopResult = await executeStep(next.action, currentMsgId)
+            loopHistory.push({
+              role: 'user' as const,
+              content: `Action Result: ${loopResult}. (Memory Trace: Previous was ${next.action.type}).`
+            })
+            current = next
           }
         }
       )
